@@ -88,7 +88,7 @@ class TrackingScreenshotService:
                     break
             
             if not result["chrome_path"]:
-                result["error"] = "未找到Chrome浏览器，请安装Chrome或Chromium"
+                result["error"] = "未找到Chrome浏览器。请运行 './start.sh' 自动安装，或手动安装：sudo apt-get install google-chrome-stable"
                 return result
             
             # 尝试获取ChromeDriver
@@ -334,7 +334,7 @@ class TrackingScreenshotService:
                 result["success"] = True
                 result["html_fallback_path"] = html_fallback_path
                 result["method"] = "html_fallback"
-                result["error"] = f"Chrome不可用({chrome_check['error']})，已生成HTML文件: {html_fallback_path}"
+                result["error"] = f"Chrome不可用: {chrome_check['error']}。已生成HTML文件作为替代方案。"
             except Exception as e:
                 result["error"] = f"Chrome不可用且HTML备用方案失败: {str(e)}"
         

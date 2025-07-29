@@ -77,6 +77,116 @@ wait_for_service() {
     return 1
 }
 
+# 安装Chrome浏览器
+install_chrome() {
+    log_step "检查并安装Chrome浏览器..."
+    
+    # 检查Chrome是否已安装
+    local chrome_commands=("google-chrome" "google-chrome-stable" "chromium-browser" "chromium" "chrome")
+    local chrome_found=false
+    
+    for cmd in "${chrome_commands[@]}"; do
+        if command -v "$cmd" &> /dev/null; then
+            log_info "找到Chrome浏览器: $cmd"
+            chrome_found=true
+            break
+        fi
+    done
+    
+    if [ "$chrome_found" = true ]; then
+        log_info "Chrome浏览器已安装"
+        return 0
+    fi
+    
+    log_warn "未找到Chrome浏览器，开始安装..."
+    
+    # 检测操作系统
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        VERSION=$VERSION_ID
+    else
+        log_error "无法检测操作系统版本"
+        return 1
+    fi
+    
+    case $OS in
+        "ubuntu"|"debian")
+            log_info "检测到Ubuntu/Debian系统，安装Chrome..."
+            
+            # 更新包列表
+            sudo apt-get update -qq
+            
+            # 安装依赖
+            sudo apt-get install -y wget gnupg
+            
+            # 添加Google Chrome仓库
+            if [ ! -f /etc/apt/sources.list.d/google-chrome.list ]; then
+                wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+                echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+                sudo apt-get update -qq
+            fi
+            
+            # 安装Chrome
+            if sudo apt-get install -y google-chrome-stable; then
+                log_info "Chrome安装成功"
+            else
+                log_warn "Chrome安装失败，尝试安装Chromium..."
+                if sudo apt-get install -y chromium-browser; then
+                    log_info "Chromium安装成功"
+                else
+                    log_error "Chrome/Chromium安装失败"
+                    return 1
+                fi
+            fi
+            ;;
+        "centos"|"rhel"|"fedora")
+            log_info "检测到CentOS/RHEL/Fedora系统，安装Chrome..."
+            
+            # 创建Chrome仓库文件
+            if [ ! -f /etc/yum.repos.d/google-chrome.repo ]; then
+                sudo tee /etc/yum.repos.d/google-chrome.repo > /dev/null <<EOF
+[google-chrome]
+name=google-chrome
+baseurl=http://dl.google.com/linux/chrome/rpm/stable/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+EOF
+            fi
+            
+            # 安装Chrome
+            if sudo yum install -y google-chrome-stable 2>/dev/null || sudo dnf install -y google-chrome-stable 2>/dev/null; then
+                log_info "Chrome安装成功"
+            else
+                log_warn "Chrome安装失败，尝试安装Chromium..."
+                if sudo yum install -y chromium 2>/dev/null || sudo dnf install -y chromium 2>/dev/null; then
+                    log_info "Chromium安装成功"
+                else
+                    log_error "Chrome/Chromium安装失败"
+                    return 1
+                fi
+            fi
+            ;;
+        *)
+            log_warn "未知的操作系统: $OS，尝试手动安装Chrome..."
+            log_info "请手动安装Chrome浏览器或Chromium："
+            log_info "Ubuntu/Debian: sudo apt-get install google-chrome-stable"
+            log_info "CentOS/RHEL: sudo yum install google-chrome-stable" 
+            log_info "或者安装Chromium: sudo apt-get install chromium-browser"
+            read -p "Chrome已安装，按Enter继续..."
+            ;;
+    esac
+    
+    # 为WSL环境添加特殊处理
+    if grep -q microsoft /proc/version; then
+        log_info "检测到WSL环境，设置Chrome无沙盒模式..."
+        export CHROME_NO_SANDBOX=1
+    fi
+    
+    return 0
+}
+
 # 检查依赖环境
 check_dependencies() {
     log_step "检查依赖环境..."
@@ -93,6 +203,9 @@ check_dependencies() {
     
     # SQLite不需要服务检查，跳过数据库服务检查
     log_info "使用SQLite数据库，无需额外服务"
+    
+    # 检查并安装Chrome
+    install_chrome
     
     # 检查Redis
     if ! check_service "Redis" 6379; then
