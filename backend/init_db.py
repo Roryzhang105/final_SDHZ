@@ -16,14 +16,13 @@ from app.models.tracking import TrackingInfo
 
 
 def create_database_if_not_exists():
-    """创建数据库（如果不存在）"""
+    """检查SQLite数据库连接"""
     try:
-        # 尝试连接到目标数据库
+        # 尝试连接到SQLite数据库
         engine.connect()
-        print(f"数据库 '{settings.POSTGRES_DB}' 已存在")
+        print("SQLite数据库连接正常")
     except Exception as e:
         print(f"数据库连接失败: {e}")
-        print("请确保PostgreSQL服务正在运行并且配置正确")
         return False
     return True
 

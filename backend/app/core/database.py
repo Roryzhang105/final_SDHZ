@@ -5,10 +5,10 @@ from typing import Generator
 
 from app.core.config import settings
 
+# SQLite配置
 engine = create_engine(
-    str(settings.DATABASE_URL),
-    pool_pre_ping=True,
-    pool_recycle=300,
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False},  # SQLite需要这个参数
     echo=False
 )
 

@@ -91,13 +91,8 @@ check_dependencies() {
         exit 1
     fi
     
-    # 检查PostgreSQL
-    if ! check_service "PostgreSQL" 5432; then
-        log_warn "PostgreSQL未运行，请启动PostgreSQL服务"
-        log_info "Ubuntu/Debian: sudo systemctl start postgresql"
-        log_info "macOS: brew services start postgresql"
-        read -p "PostgreSQL已启动，按Enter继续..."
-    fi
+    # SQLite不需要服务检查，跳过数据库服务检查
+    log_info "使用SQLite数据库，无需额外服务"
     
     # 检查Redis
     if ! check_service "Redis" 6379; then
