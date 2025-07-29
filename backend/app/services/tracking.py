@@ -1,6 +1,6 @@
 from typing import Optional
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.models.tracking import TrackingInfo
 from app.models.delivery_receipt import DeliveryReceipt
@@ -43,11 +43,18 @@ class TrackingService:
         """创建或更新物流跟踪信息"""
         tracking = self.get_tracking_by_receipt_id(receipt_id)
         
+        # 从tracking_data中提取签收状态
+        is_signed = "true" if tracking_data.get("is_signed", False) else "false"
+        sign_time = tracking_data.get("sign_time", "")
+        
+        current_time = datetime.utcnow()
+        
         if tracking:
             # 更新现有记录
             tracking.current_status = current_status
             tracking.tracking_data = tracking_data
-            tracking.last_update = datetime.utcnow()
+            tracking.last_update = current_time
+            tracking.is_signed = is_signed
             if notes:
                 tracking.notes = notes
         else:
@@ -56,7 +63,8 @@ class TrackingService:
                 delivery_receipt_id=receipt_id,
                 current_status=current_status,
                 tracking_data=tracking_data,
-                last_update=datetime.utcnow(),
+                last_update=current_time,
+                is_signed=is_signed,
                 notes=notes
             )
             self.db.add(tracking)
@@ -64,3 +72,49 @@ class TrackingService:
         self.db.commit()
         self.db.refresh(tracking)
         return tracking
+    
+    def should_refresh_tracking(self, tracking_info: TrackingInfo, refresh_threshold_minutes: int = 30) -> bool:
+        """
+        判断是否需要重新查询物流信息
+        
+        Args:
+            tracking_info: 现有的物流信息记录
+            refresh_threshold_minutes: 刷新阈值（分钟），默认30分钟
+            
+        Returns:
+            True: 需要重新查询, False: 使用现有缓存
+        """
+        if not tracking_info:
+            return True
+        
+        # 1. 检查是否已签收
+        is_signed = tracking_info.is_signed == "true"
+        if is_signed:
+            # 已签收的快递状态不会再变化，不需要重新查询
+            return False
+        
+        # 2. 未签收的快递需要检查上次查询时间
+        if not tracking_info.last_update:
+            # 没有记录查询时间，需要重新查询
+            return True
+        
+        # 3. 计算时间差
+        current_time = datetime.utcnow()
+        time_diff = current_time - tracking_info.last_update
+        threshold = timedelta(minutes=refresh_threshold_minutes)
+        
+        # 4. 如果超过阈值时间，需要重新查询
+        return time_diff > threshold
+    
+    def is_tracking_data_fresh(self, tracking_info: TrackingInfo, threshold_minutes: int = 30) -> bool:
+        """
+        检查物流数据是否新鲜（在阈值时间内）
+        
+        Args:
+            tracking_info: 物流信息记录
+            threshold_minutes: 时间阈值（分钟）
+            
+        Returns:
+            True: 数据新鲜, False: 数据过时
+        """
+        return not self.should_refresh_tracking(tracking_info, threshold_minutes)

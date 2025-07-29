@@ -24,31 +24,47 @@ async def get_tracking_info(
     db: Session = Depends(get_db)
 ):
     """
-    获取物流跟踪信息
-    优先从数据库查询，如果没有则调用快递100 API
+    智能获取物流跟踪信息
+    - 已签收快递：永久使用数据库缓存
+    - 未签收快递：30分钟内使用缓存，超时重新查询API
+    - 无记录快递：调用快递100 API并缓存结果
     """
     tracking_service = TrackingService(db)
     express_service = ExpressTrackingService(db)
     
-    # 1. 先尝试从数据库获取
+    # 1. 查询数据库中的物流记录
     tracking_info = tracking_service.get_tracking_by_number(tracking_number)
     
+    # 2. 如果数据库中有记录，使用智能缓存策略
     if tracking_info:
-        # 数据库中有记录，直接返回
-        return {
-            "success": True,
-            "source": "database",
-            "tracking_number": tracking_number,
-            "data": {
-                "current_status": tracking_info.current_status,
-                "last_update": tracking_info.last_update.isoformat() if tracking_info.last_update else None,
-                "tracking_data": tracking_info.tracking_data,
-                "notes": tracking_info.notes,
-                "delivery_receipt_id": tracking_info.delivery_receipt_id
+        should_refresh = tracking_service.should_refresh_tracking(tracking_info)
+        
+        if not should_refresh:
+            # 不需要刷新（已签收或30分钟内），直接返回数据库记录
+            cache_reason = "已签收，使用永久缓存" if tracking_info.is_signed == "true" else "30分钟内，使用时效缓存"
+            
+            return {
+                "success": True,
+                "source": "database_cache",
+                "cache_reason": cache_reason,
+                "tracking_number": tracking_number,
+                "data": {
+                    "current_status": tracking_info.current_status,
+                    "is_signed": tracking_info.is_signed == "true",
+                    "last_update": tracking_info.last_update.isoformat() if tracking_info.last_update else None,
+                    "tracking_data": tracking_info.tracking_data,
+                    "notes": tracking_info.notes,
+                    "delivery_receipt_id": tracking_info.delivery_receipt_id
+                }
             }
-        }
+        else:
+            # 需要刷新（未签收且超过30分钟），调用API更新
+            source_reason = "未签收且超过30分钟，重新查询API"
+    else:
+        # 数据库中没有记录
+        source_reason = "数据库中无记录，首次查询API"
     
-    # 2. 数据库中没有记录，调用快递100 API
+    # 3. 调用快递100 API获取最新信息
     try:
         # 推断快递公司编码
         if company_code == "ems":
@@ -63,21 +79,25 @@ async def get_tracking_info(
                 detail=f"未找到物流信息: {api_result.get('error', '快递100查询失败')}"
             )
         
-        # 3. 尝试保存到数据库（如果有对应的送达回证记录）
+        # 4. 尝试保存到数据库（如果有对应的送达回证记录）
         receipt = tracking_service.get_receipt_by_tracking_number(tracking_number)
+        saved_to_database = False
+        
         if receipt:
             # 有对应的送达回证，保存物流信息到数据库
             tracking_service.create_or_update_tracking(
                 receipt_id=receipt.id,
                 current_status=api_result["current_status"],
                 tracking_data=api_result,
-                notes=f"从快递100 API获取，查询时间: {api_result['last_update']}"
+                notes=f"智能查询更新，查询时间: {api_result['last_update']}"
             )
+            saved_to_database = True
         
-        # 4. 返回API查询结果
+        # 5. 返回API查询结果
         return {
             "success": True,
             "source": "kuaidi100_api",
+            "source_reason": source_reason,
             "tracking_number": tracking_number,
             "company_code": company_code,
             "data": {
@@ -89,7 +109,7 @@ async def get_tracking_info(
                 "from_cache": api_result.get("from_cache", False),
                 "message": api_result.get("message", "")
             },
-            "saved_to_database": receipt is not None
+            "saved_to_database": saved_to_database
         }
         
     except HTTPException:
