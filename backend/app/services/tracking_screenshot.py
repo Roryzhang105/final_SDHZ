@@ -3,6 +3,9 @@ import shutil
 import subprocess
 import tempfile
 import datetime
+import platform
+import requests
+import zipfile
 from typing import Dict, List, Optional
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -57,6 +60,170 @@ class TrackingScreenshotService:
         self.html_dir = Path(settings.UPLOAD_DIR) / "tracking_html"
         self.html_dir.mkdir(exist_ok=True)
     
+    def _get_system_info(self) -> Dict:
+        """获取系统信息"""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        # 确定架构
+        if machine in ['x86_64', 'amd64']:
+            arch = 'linux64'
+        elif machine in ['aarch64', 'arm64']:
+            arch = 'linux64'  # Chrome也为ARM64提供linux64版本
+        else:
+            arch = 'linux64'  # 默认使用linux64
+            
+        return {
+            "system": system,
+            "machine": machine, 
+            "arch": arch,
+            "is_wsl": 'microsoft' in platform.uname().release.lower()
+        }
+    
+    def _validate_chromedriver(self, driver_path: str) -> bool:
+        """验证ChromeDriver是否可用"""
+        try:
+            if not os.path.exists(driver_path):
+                return False
+                
+            # 检查是否是可执行文件
+            if not os.access(driver_path, os.X_OK):
+                try:
+                    os.chmod(driver_path, 0o755)
+                except:
+                    return False
+            
+            # 尝试运行版本检查
+            result = subprocess.run([driver_path, '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+            return result.returncode == 0
+            
+        except Exception:
+            return False
+    
+    def _find_correct_chromedriver(self, base_path: str) -> Optional[str]:
+        """在WebDriver Manager下载目录中查找正确的chromedriver可执行文件"""
+        try:
+            # 遍历目录寻找chromedriver可执行文件
+            for root, dirs, files in os.walk(os.path.dirname(base_path)):
+                for file in files:
+                    if file == 'chromedriver' or file == 'chromedriver.exe':
+                        full_path = os.path.join(root, file)
+                        if self._validate_chromedriver(full_path):
+                            return full_path
+            return None
+        except Exception:
+            return None
+    
+    def _download_chromedriver_manually(self) -> Optional[str]:
+        """手动下载ChromeDriver作为备用方案"""
+        try:
+            system_info = self._get_system_info()
+            
+            # 创建ChromeDriver缓存目录
+            cache_dir = Path.home() / '.chromedriver_cache'
+            cache_dir.mkdir(exist_ok=True)
+            
+            # 获取Chrome版本
+            chrome_version = self._get_chrome_version()
+            if not chrome_version:
+                return None
+                
+            major_version = chrome_version.split('.')[0]
+            
+            # 构建下载URL
+            download_url = f"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{major_version}"
+            
+            try:
+                # 获取具体版本号
+                version_response = requests.get(download_url, timeout=10)
+                if version_response.status_code != 200:
+                    # 尝试使用较新的API
+                    download_url = f"https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{major_version}"
+                    version_response = requests.get(download_url, timeout=10)
+                    
+                if version_response.status_code == 200:
+                    driver_version = version_response.text.strip()
+                else:
+                    return None
+                    
+            except requests.RequestException:
+                return None
+            
+            # 构建ChromeDriver下载URL
+            if int(major_version) >= 115:
+                # 新版本API
+                zip_url = f"https://storage.googleapis.com/chrome-for-testing-public/{driver_version}/{system_info['arch']}/chromedriver-{system_info['arch']}.zip"
+            else:
+                # 旧版本API
+                zip_url = f"https://chromedriver.storage.googleapis.com/{driver_version}/chromedriver_{system_info['arch']}.zip"
+            
+            # 下载ChromeDriver
+            zip_path = cache_dir / f"chromedriver_{driver_version}.zip"
+            driver_dir = cache_dir / f"chromedriver_{driver_version}"
+            
+            if not driver_dir.exists():
+                response = requests.get(zip_url, timeout=30)
+                if response.status_code == 200:
+                    with open(zip_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    # 解压
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(driver_dir)
+                    
+                    # 删除zip文件
+                    zip_path.unlink()
+                else:
+                    return None
+            
+            # 查找chromedriver可执行文件
+            for root, dirs, files in os.walk(driver_dir):
+                for file in files:
+                    if file == 'chromedriver' or file == 'chromedriver.exe':
+                        driver_path = os.path.join(root, file)
+                        if self._validate_chromedriver(driver_path):
+                            return driver_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"手动下载ChromeDriver失败: {e}")
+            return None
+    
+    def _get_chrome_version(self) -> Optional[str]:
+        """获取Chrome版本"""
+        chrome_commands = [
+            'google-chrome --version',
+            'google-chrome-stable --version', 
+            'chromium-browser --version',
+            'chromium --version'
+        ]
+        
+        for cmd in chrome_commands:
+            try:
+                result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    # 解析版本号
+                    version_line = result.stdout.strip()
+                    # 提取版本号 (例如: "Google Chrome 120.0.6099.109")
+                    import re
+                    match = re.search(r'\d+\.\d+\.\d+\.\d+', version_line)
+                    if match:
+                        return match.group(0)
+            except Exception:
+                continue
+        return None
+    
+    def _clean_chromedriver_cache(self):
+        """清理损坏的ChromeDriver缓存"""
+        try:
+            wdm_cache = Path.home() / '.wdm'
+            if wdm_cache.exists():
+                shutil.rmtree(wdm_cache)
+        except Exception:
+            pass
+    
     def _check_chrome_available(self) -> Dict:
         """
         检查Chrome浏览器是否可用
@@ -68,7 +235,8 @@ class TrackingScreenshotService:
             "available": False,
             "error": None,
             "chrome_path": None,
-            "driver_path": None
+            "driver_path": None,
+            "system_info": self._get_system_info()
         }
         
         try:
@@ -91,16 +259,45 @@ class TrackingScreenshotService:
                 result["error"] = "未找到Chrome浏览器。请运行 './start.sh' 自动安装，或手动安装：sudo apt-get install google-chrome-stable"
                 return result
             
-            # 尝试获取ChromeDriver
+            # 尝试获取ChromeDriver - 多种方法
+            driver_path = None
+            
+            # 方法1: 使用WebDriver Manager
             try:
                 driver_path = ChromeDriverManager().install()
-                if driver_path:
-                    result["driver_path"] = driver_path
-                    result["available"] = True
-                else:
-                    result["error"] = "ChromeDriver安装失败"
+                
+                # 验证返回的路径
+                if driver_path and not self._validate_chromedriver(driver_path):
+                    # 尝试在同一目录下查找正确的chromedriver
+                    correct_path = self._find_correct_chromedriver(driver_path)
+                    if correct_path:
+                        driver_path = correct_path
+                    else:
+                        driver_path = None
+                        
             except Exception as e:
-                result["error"] = f"ChromeDriver获取失败: {str(e)}"
+                print(f"WebDriver Manager失败: {e}")
+                driver_path = None
+            
+            # 方法2: 如果WebDriver Manager失败，尝试手动下载
+            if not driver_path:
+                print("尝试手动下载ChromeDriver...")
+                # 清理可能损坏的缓存
+                self._clean_chromedriver_cache()
+                driver_path = self._download_chromedriver_manually()
+            
+            # 方法3: 检查系统是否已安装chromedriver
+            if not driver_path:
+                system_chromedriver = shutil.which('chromedriver')
+                if system_chromedriver and self._validate_chromedriver(system_chromedriver):
+                    driver_path = system_chromedriver
+            
+            if driver_path:
+                result["driver_path"] = driver_path
+                result["available"] = True
+            else:
+                system_info = result["system_info"]
+                result["error"] = f"ChromeDriver获取失败。系统信息: {system_info['system']}/{system_info['machine']}{'(WSL)' if system_info['is_wsl'] else ''}。请尝试手动安装ChromeDriver或联系管理员。"
             
         except Exception as e:
             result["error"] = f"Chrome检测过程中发生错误: {str(e)}"
