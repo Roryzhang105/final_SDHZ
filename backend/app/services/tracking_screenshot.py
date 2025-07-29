@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 import tempfile
 import datetime
 from typing import Dict, List, Optional
@@ -52,6 +54,78 @@ class TrackingScreenshotService:
         self.express_service = ExpressTrackingService(db)
         self.screenshot_dir = Path(settings.UPLOAD_DIR) / "tracking_screenshots"
         self.screenshot_dir.mkdir(exist_ok=True)
+        self.html_dir = Path(settings.UPLOAD_DIR) / "tracking_html"
+        self.html_dir.mkdir(exist_ok=True)
+    
+    def _check_chrome_available(self) -> Dict:
+        """
+        检查Chrome浏览器是否可用
+        
+        Returns:
+            包含检查结果的字典
+        """
+        result = {
+            "available": False,
+            "error": None,
+            "chrome_path": None,
+            "driver_path": None
+        }
+        
+        try:
+            # 检查是否存在Chrome或Chromium
+            chrome_commands = [
+                'google-chrome',
+                'google-chrome-stable', 
+                'chromium-browser',
+                'chromium',
+                'chrome'
+            ]
+            
+            for cmd in chrome_commands:
+                chrome_path = shutil.which(cmd)
+                if chrome_path:
+                    result["chrome_path"] = chrome_path
+                    break
+            
+            if not result["chrome_path"]:
+                result["error"] = "未找到Chrome浏览器，请安装Chrome或Chromium"
+                return result
+            
+            # 尝试获取ChromeDriver
+            try:
+                driver_path = ChromeDriverManager().install()
+                if driver_path:
+                    result["driver_path"] = driver_path
+                    result["available"] = True
+                else:
+                    result["error"] = "ChromeDriver安装失败"
+            except Exception as e:
+                result["error"] = f"ChromeDriver获取失败: {str(e)}"
+            
+        except Exception as e:
+            result["error"] = f"Chrome检测过程中发生错误: {str(e)}"
+        
+        return result
+    
+    def _generate_html_fallback(self, html_path: str, tracking_number: str) -> str:
+        """
+        当Chrome不可用时，生成HTML文件作为备用方案
+        
+        Args:
+            html_path: 临时HTML文件路径
+            tracking_number: 快递单号
+            
+        Returns:
+            永久HTML文件路径
+        """
+        # 生成永久HTML文件名
+        html_filename = f"tracking_{tracking_number}_{datetime.datetime.now():%Y%m%d_%H%M%S}.html"
+        permanent_html_path = self.html_dir / html_filename
+        
+        # 复制临时HTML文件到永久位置
+        shutil.copy2(html_path, permanent_html_path)
+        
+        return str(permanent_html_path)
     
     def generate_screenshot(self, tracking_number: str, company_code: str = "ems") -> Dict:
         """
@@ -87,7 +161,8 @@ class TrackingScreenshotService:
             screenshot_filename = f"tracking_{tracking_number}_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
             screenshot_path = self.screenshot_dir / screenshot_filename
             
-            self._html_to_png(html_path, str(screenshot_path))
+            # 调用改进的截图方法
+            screenshot_result = self._html_to_png(html_path, str(screenshot_path), tracking_number)
             
             # 4. 清理临时HTML文件
             try:
@@ -95,21 +170,45 @@ class TrackingScreenshotService:
             except:
                 pass
             
-            # 5. 获取文件信息
-            file_size = screenshot_path.stat().st_size if screenshot_path.exists() else 0
-            
-            return {
-                "success": True,
-                "message": "物流轨迹截图生成成功",
+            # 5. 处理截图结果
+            response = {
                 "tracking_number": tracking_number,
                 "company_code": company_code,
-                "screenshot_path": str(screenshot_path),
-                "screenshot_filename": screenshot_filename,
-                "file_size": file_size,
                 "is_signed": tracking_result.get("is_signed", False),
                 "current_status": tracking_result["current_status"],
-                "traces_count": len(tracking_result.get("traces", []))
+                "traces_count": len(tracking_result.get("traces", [])),
+                "screenshot_method": screenshot_result.get("method", "unknown")
             }
+            
+            if screenshot_result["success"]:
+                if screenshot_result.get("screenshot_path"):
+                    # 成功生成PNG截图
+                    file_size = Path(screenshot_result["screenshot_path"]).stat().st_size if Path(screenshot_result["screenshot_path"]).exists() else 0
+                    response.update({
+                        "success": True,
+                        "message": "物流轨迹截图生成成功",
+                        "screenshot_path": screenshot_result["screenshot_path"],
+                        "screenshot_filename": screenshot_filename,
+                        "file_size": file_size
+                    })
+                elif screenshot_result.get("html_fallback_path"):
+                    # 生成HTML备用文件
+                    file_size = Path(screenshot_result["html_fallback_path"]).stat().st_size if Path(screenshot_result["html_fallback_path"]).exists() else 0
+                    response.update({
+                        "success": True,
+                        "message": "截图功能不可用，已生成HTML轨迹文件",
+                        "html_fallback_path": screenshot_result["html_fallback_path"],
+                        "file_size": file_size,
+                        "note": "Chrome浏览器不可用，已提供HTML格式的轨迹文件"
+                    })
+            else:
+                response.update({
+                    "success": False,
+                    "message": "截图生成失败",
+                    "error": screenshot_result.get("error", "未知错误")
+                })
+            
+            return response
             
         except Exception as e:
             return {
@@ -156,54 +255,90 @@ class TrackingScreenshotService:
         
         return html_path
     
-    def _html_to_png(self, html_path: str, output_path: str) -> None:
+    def _html_to_png(self, html_path: str, output_path: str, tracking_number: str = "") -> Dict:
         """
-        将HTML转换为PNG截图
+        将HTML转换为PNG截图，支持Chrome检测和备用方案
         
         Args:
             html_path: HTML文件路径
             output_path: 输出PNG文件路径
+            tracking_number: 快递单号（用于备用方案）
+            
+        Returns:
+            转换结果字典
         """
-        try:
-            # 配置Chrome选项
-            chrome_options = Options()
-            chrome_options.add_argument('--headless=new')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--window-size=1280,1600')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-extensions')
-            
-            # 创建WebDriver
+        result = {
+            "success": False,
+            "screenshot_path": None,
+            "html_fallback_path": None,
+            "method": None,
+            "error": None
+        }
+        
+        # 1. 检查Chrome是否可用
+        chrome_check = self._check_chrome_available()
+        
+        if chrome_check["available"]:
+            # Chrome可用，尝试生成截图
             try:
-                service = Service(ChromeDriverManager().install())
+                # 配置Chrome选项
+                chrome_options = Options()
+                chrome_options.add_argument('--headless=new')
+                chrome_options.add_argument('--no-sandbox')
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                chrome_options.add_argument('--window-size=1280,1600')
+                chrome_options.add_argument('--disable-gpu')
+                chrome_options.add_argument('--disable-extensions')
+                chrome_options.add_argument('--disable-logging')
+                chrome_options.add_argument('--disable-crash-reporter')
+                
+                # 创建WebDriver
+                service = Service(chrome_check["driver_path"])
                 driver = webdriver.Chrome(service=service, options=chrome_options)
-            except Exception as e:
-                raise Exception(f"无法启动Chrome浏览器: {str(e)}。请确保系统已安装Chrome浏览器")
-            
-            try:
-                # 加载HTML文件
-                file_url = 'file:///' + os.path.abspath(html_path)
-                driver.get(file_url)
-                driver.implicitly_wait(5)
                 
-                # 找到容器元素并截图
-                container = driver.find_element('id', 'capture-container')
-                screenshot_data = container.screenshot_as_png
-                
-                # 保存截图
-                with open(output_path, 'wb') as f:
-                    f.write(screenshot_data)
+                try:
+                    # 加载HTML文件
+                    file_url = 'file:///' + os.path.abspath(html_path)
+                    driver.get(file_url)
+                    driver.implicitly_wait(5)
                     
-            finally:
-                driver.quit()
-                
-        except Exception as e:
-            # 如果截图失败，创建一个占位文件
-            placeholder_content = f"截图生成失败: {str(e)}\n请确保服务器环境已正确安装Chrome浏览器和相关依赖"
-            with open(output_path + ".txt", 'w', encoding='utf-8') as f:
-                f.write(placeholder_content)
-            raise
+                    # 找到容器元素并截图
+                    container = driver.find_element('id', 'capture-container')
+                    screenshot_data = container.screenshot_as_png
+                    
+                    # 保存截图
+                    with open(output_path, 'wb') as f:
+                        f.write(screenshot_data)
+                    
+                    result["success"] = True
+                    result["screenshot_path"] = output_path
+                    result["method"] = "chrome_screenshot"
+                    
+                finally:
+                    driver.quit()
+                    
+            except Exception as e:
+                result["error"] = f"Chrome截图失败: {str(e)}"
+                # Chrome失败，尝试备用方案
+                try:
+                    html_fallback_path = self._generate_html_fallback(html_path, tracking_number)
+                    result["html_fallback_path"] = html_fallback_path
+                    result["method"] = "html_fallback"
+                    result["error"] += f"，已生成HTML备用文件: {html_fallback_path}"
+                except Exception as fallback_error:
+                    result["error"] += f"，HTML备用方案也失败: {str(fallback_error)}"
+        else:
+            # Chrome不可用，直接使用HTML备用方案
+            try:
+                html_fallback_path = self._generate_html_fallback(html_path, tracking_number)
+                result["success"] = True
+                result["html_fallback_path"] = html_fallback_path
+                result["method"] = "html_fallback"
+                result["error"] = f"Chrome不可用({chrome_check['error']})，已生成HTML文件: {html_fallback_path}"
+            except Exception as e:
+                result["error"] = f"Chrome不可用且HTML备用方案失败: {str(e)}"
+        
+        return result
     
     def batch_generate_screenshots(self, tracking_numbers: List[str], company_code: str = "ems") -> List[Dict]:
         """
@@ -255,7 +390,8 @@ class TrackingScreenshotService:
             screenshot_filename = f"tracking_{tracking_number}_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
             screenshot_path = self.screenshot_dir / screenshot_filename
             
-            self._html_to_png(html_path, str(screenshot_path))
+            # 调用改进的截图方法
+            screenshot_result = self._html_to_png(html_path, str(screenshot_path), tracking_number)
             
             # 清理临时HTML文件
             try:
@@ -263,21 +399,45 @@ class TrackingScreenshotService:
             except:
                 pass
             
-            # 获取文件信息
-            file_size = screenshot_path.stat().st_size if screenshot_path.exists() else 0
-            
-            return {
-                "success": True,
-                "message": "物流轨迹截图生成成功",
+            # 处理截图结果
+            response = {
                 "tracking_number": tracking_number,
                 "company_code": tracking_data.get("company_code", ""),
-                "screenshot_path": str(screenshot_path),
-                "screenshot_filename": screenshot_filename,
-                "file_size": file_size,
                 "is_signed": tracking_data.get("is_signed", False), 
                 "current_status": tracking_data["current_status"],
-                "traces_count": len(tracking_data.get("traces", []))
+                "traces_count": len(tracking_data.get("traces", [])),
+                "screenshot_method": screenshot_result.get("method", "unknown")
             }
+            
+            if screenshot_result["success"]:
+                if screenshot_result.get("screenshot_path"):
+                    # 成功生成PNG截图
+                    file_size = Path(screenshot_result["screenshot_path"]).stat().st_size if Path(screenshot_result["screenshot_path"]).exists() else 0
+                    response.update({
+                        "success": True,
+                        "message": "物流轨迹截图生成成功",
+                        "screenshot_path": screenshot_result["screenshot_path"],
+                        "screenshot_filename": screenshot_filename,
+                        "file_size": file_size
+                    })
+                elif screenshot_result.get("html_fallback_path"):
+                    # 生成HTML备用文件
+                    file_size = Path(screenshot_result["html_fallback_path"]).stat().st_size if Path(screenshot_result["html_fallback_path"]).exists() else 0
+                    response.update({
+                        "success": True,
+                        "message": "截图功能不可用，已生成HTML轨迹文件",
+                        "html_fallback_path": screenshot_result["html_fallback_path"],
+                        "file_size": file_size,
+                        "note": "Chrome浏览器不可用，已提供HTML格式的轨迹文件"
+                    })
+            else:
+                response.update({
+                    "success": False,
+                    "message": "截图生成失败",
+                    "error": screenshot_result.get("error", "未知错误")
+                })
+            
+            return response
             
         except Exception as e:
             return {
