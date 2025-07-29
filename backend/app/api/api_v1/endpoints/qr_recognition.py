@@ -102,7 +102,7 @@ async def recognize_qr_code(
             }
         }
         
-        if result["error_message"]:
+        if result.get("error_message"):
             response["data"]["error_message"] = result["error_message"]
         
         return response
