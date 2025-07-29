@@ -18,5 +18,11 @@ class TrackingInfo(BaseModel):
     # 物流轨迹数据 (JSON格式存储)
     tracking_data = Column(JSON)
     
+    # 截图相关字段
+    screenshot_path = Column(String(500))  # 截图文件路径
+    screenshot_filename = Column(String(255))  # 截图文件名
+    screenshot_generated_at = Column(DateTime)  # 截图生成时间
+    is_signed = Column(String(10), default="false")  # 是否已签收
+    
     # 备注
     notes = Column(Text)

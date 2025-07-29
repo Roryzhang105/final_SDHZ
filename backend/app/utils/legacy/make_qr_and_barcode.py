@@ -15,6 +15,7 @@ make_qr_and_barcode.py
     pip install qrcode[pil] python-barcode Pillow
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -85,7 +86,9 @@ def make_barcode(code: str,
     # 3) 绘制下方数字，微软雅黑、字号35、字间距10，紧贴条形码
     draw = ImageDraw.Draw(canvas)
     try:
-        font = ImageFont.truetype(r"C:\Windows\Fonts\msyh.ttc", size=font_size)
+        # 使用相对路径指向同目录下的字体文件
+        font_path = os.path.join(os.path.dirname(__file__), "msyh.ttc")
+        font = ImageFont.truetype(font_path, size=font_size)
     except Exception:
         font = ImageFont.load_default()
 

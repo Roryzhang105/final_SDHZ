@@ -47,26 +47,37 @@ def fetch_tracking_data(tracking_number: str, courier_code: str) -> dict:
     调用快递查询API获取物流数据
     """
     try:
-        # 这里应该调用实际的快递查询API
-        # 暂时返回模拟数据
-        return {
-            "tracking_number": tracking_number,
-            "courier_code": courier_code,
-            "status": "运输中",
-            "update_time": "2024-01-01 12:00:00",
-            "traces": [
-                {
-                    "time": "2024-01-01 10:00:00",
-                    "status": "已发货",
-                    "location": "发货地"
-                },
-                {
-                    "time": "2024-01-01 12:00:00", 
-                    "status": "运输中",
-                    "location": "中转站"
+        # 使用ExpressTrackingService调用快递100 API
+        from app.services.express_tracking import ExpressTrackingService
+        from app.core.database import SessionLocal
+        
+        db = SessionLocal()
+        try:
+            express_service = ExpressTrackingService(db)
+            
+            # 调用快递100 API查询
+            result = express_service.query_express(tracking_number, courier_code or "ems")
+            
+            if result["success"]:
+                # 转换为tracking_tasks期望的格式
+                return {
+                    "tracking_number": tracking_number,
+                    "courier_code": result.get("company_code", courier_code),
+                    "status": result.get("current_status", ""),
+                    "is_signed": result.get("is_signed", False),
+                    "sign_time": result.get("sign_time", ""),
+                    "update_time": result.get("last_update", ""),
+                    "traces": result.get("traces", []),
+                    "raw_data": result.get("raw_data", {}),
+                    "from_cache": result.get("from_cache", False)
                 }
-            ]
-        }
+            else:
+                print(f"快递100 API查询失败: {result.get('error', '未知错误')}")
+                return None
+                
+        finally:
+            db.close()
+            
     except Exception as e:
         print(f"获取物流数据失败: {e}")
         return None

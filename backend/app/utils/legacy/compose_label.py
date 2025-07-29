@@ -6,8 +6,8 @@ compose_label.py  –  把二维码、条形码叠到模板图指定位置
 用法示例
 --------
 python compose_label.py template.jpg qr.png barcode.png \
-    --qr-x 60  --qr-y 80   \
-    --bc-x 60  --bc-y 320  \
+    --qr-x 80  --qr-y 260   \
+    --bc-x 365  --bc-y 30  \
     --output final_label.png
 """
 
