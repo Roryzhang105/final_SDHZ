@@ -3,11 +3,15 @@ from .user import User
 from .delivery_receipt import DeliveryReceipt
 from .courier import Courier
 from .tracking import TrackingInfo
+from .recognition import RecognitionTask, RecognitionResult, CourierPattern
 
 __all__ = [
     "Base",
     "User", 
     "DeliveryReceipt",
     "Courier",
-    "TrackingInfo"
+    "TrackingInfo",
+    "RecognitionTask",
+    "RecognitionResult", 
+    "CourierPattern"
 ]

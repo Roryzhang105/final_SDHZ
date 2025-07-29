@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.delivery_receipt import DeliveryReceipt
 from app.models.courier import Courier
 from app.models.tracking import TrackingInfo
+from app.models.recognition import RecognitionTask, RecognitionResult, CourierPattern
 
 
 def create_database_if_not_exists():
