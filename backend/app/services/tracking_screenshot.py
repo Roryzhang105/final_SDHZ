@@ -17,6 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from app.core.config import settings
 from app.services.express_tracking import ExpressTrackingService
+from app.services.tracking import TrackingService
 
 
 class TrackingScreenshotService:
@@ -55,6 +56,7 @@ class TrackingScreenshotService:
     def __init__(self, db: Session):
         self.db = db
         self.express_service = ExpressTrackingService(db)
+        self.tracking_service = TrackingService(db)
         self.screenshot_dir = Path(settings.UPLOAD_DIR) / "tracking_screenshots"
         self.screenshot_dir.mkdir(exist_ok=True)
         self.html_dir = Path(settings.UPLOAD_DIR) / "tracking_html"
@@ -381,12 +383,21 @@ class TrackingScreenshotService:
                 if screenshot_result.get("screenshot_path"):
                     # 成功生成PNG截图
                     file_size = Path(screenshot_result["screenshot_path"]).stat().st_size if Path(screenshot_result["screenshot_path"]).exists() else 0
+                    
+                    # 更新数据库中的截图信息
+                    db_updated = self.tracking_service.update_screenshot_info(
+                        tracking_number=tracking_number,
+                        screenshot_path=screenshot_result["screenshot_path"],
+                        screenshot_filename=screenshot_filename
+                    )
+                    
                     response.update({
                         "success": True,
                         "message": "物流轨迹截图生成成功",
                         "screenshot_path": screenshot_result["screenshot_path"],
                         "screenshot_filename": screenshot_filename,
-                        "file_size": file_size
+                        "file_size": file_size,
+                        "db_updated": db_updated
                     })
                 elif screenshot_result.get("html_fallback_path"):
                     # 生成HTML备用文件
@@ -610,12 +621,21 @@ class TrackingScreenshotService:
                 if screenshot_result.get("screenshot_path"):
                     # 成功生成PNG截图
                     file_size = Path(screenshot_result["screenshot_path"]).stat().st_size if Path(screenshot_result["screenshot_path"]).exists() else 0
+                    
+                    # 更新数据库中的截图信息
+                    db_updated = self.tracking_service.update_screenshot_info(
+                        tracking_number=tracking_number,
+                        screenshot_path=screenshot_result["screenshot_path"],
+                        screenshot_filename=screenshot_filename
+                    )
+                    
                     response.update({
                         "success": True,
                         "message": "物流轨迹截图生成成功",
                         "screenshot_path": screenshot_result["screenshot_path"],
                         "screenshot_filename": screenshot_filename,
-                        "file_size": file_size
+                        "file_size": file_size,
+                        "db_updated": db_updated
                     })
                 elif screenshot_result.get("html_fallback_path"):
                     # 生成HTML备用文件

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
+import os
 
 from app.core.database import get_db
 from app.services.tracking import TrackingService
@@ -549,6 +551,128 @@ async def clear_express_cache(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"清理缓存失败: {str(e)}")
+
+
+@router.get("/{tracking_number}/screenshots")
+async def get_stored_screenshots(
+    tracking_number: str,
+    db: Session = Depends(get_db)
+):
+    """
+    获取数据库中存储的截图信息
+    
+    Args:
+        tracking_number: 快递单号
+        db: 数据库会话
+    
+    Returns:
+        截图信息，包括路径、生成时间等
+    """
+    try:
+        tracking_service = TrackingService(db)
+        tracking_info = tracking_service.get_tracking_by_number(tracking_number)
+        
+        if not tracking_info:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"未找到快递单号 {tracking_number} 的物流记录"
+            )
+        
+        # 检查是否有截图记录
+        if not tracking_info.screenshot_path:
+            return {
+                "success": False,
+                "message": "该物流记录暂无截图",
+                "tracking_number": tracking_number,
+                "current_status": tracking_info.current_status,
+                "is_signed": tracking_info.is_signed == "true",
+                "last_update": tracking_info.last_update.isoformat() if tracking_info.last_update else None,
+                "screenshot_available": False
+            }
+        
+        # 检查截图文件是否仍然存在
+        import os
+        screenshot_exists = os.path.exists(tracking_info.screenshot_path)
+        
+        return {
+            "success": True,
+            "message": "获取截图信息成功",
+            "tracking_number": tracking_number,
+            "current_status": tracking_info.current_status,
+            "is_signed": tracking_info.is_signed == "true",
+            "last_update": tracking_info.last_update.isoformat() if tracking_info.last_update else None,
+            "screenshot_info": {
+                "screenshot_path": tracking_info.screenshot_path,
+                "screenshot_filename": tracking_info.screenshot_filename,
+                "screenshot_generated_at": tracking_info.screenshot_generated_at.isoformat() if tracking_info.screenshot_generated_at else None,
+                "screenshot_exists": screenshot_exists,
+                "file_size": os.path.getsize(tracking_info.screenshot_path) if screenshot_exists else 0
+            },
+            "screenshot_available": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取截图信息失败: {str(e)}")
+
+
+@router.get("/{tracking_number}/screenshots/download")  
+async def download_screenshot(
+    tracking_number: str,
+    db: Session = Depends(get_db)
+):
+    """
+    下载物流截图文件
+    
+    Args:
+        tracking_number: 快递单号
+        db: 数据库会话
+    
+    Returns:
+        截图文件下载响应
+    """
+    try:
+        tracking_service = TrackingService(db)
+        tracking_info = tracking_service.get_tracking_by_number(tracking_number)
+        
+        if not tracking_info:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"未找到快递单号 {tracking_number} 的物流记录"
+            )
+        
+        if not tracking_info.screenshot_path:
+            raise HTTPException(
+                status_code=404, 
+                detail="该物流记录暂无截图文件"
+            )
+        
+        # 检查文件是否存在
+        if not os.path.exists(tracking_info.screenshot_path):
+            raise HTTPException(
+                status_code=404, 
+                detail="截图文件不存在，可能已被删除"
+            )
+        
+        # 安全检查：确保文件在允许的目录内
+        from app.core.config import settings
+        if not os.path.abspath(tracking_info.screenshot_path).startswith(os.path.abspath(settings.UPLOAD_DIR)):
+            raise HTTPException(status_code=403, detail="访问被拒绝")
+        
+        # 确定文件名
+        filename = tracking_info.screenshot_filename or f"tracking_{tracking_number}_screenshot.png"
+        
+        return FileResponse(
+            path=tracking_info.screenshot_path,
+            filename=filename,
+            media_type='image/png'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"下载截图失败: {str(e)}")
 
 
 @router.get("/test/{tracking_number}")

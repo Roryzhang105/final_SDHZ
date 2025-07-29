@@ -73,6 +73,36 @@ class TrackingService:
         self.db.refresh(tracking)
         return tracking
     
+    def update_screenshot_info(
+        self,
+        tracking_number: str,
+        screenshot_path: str,
+        screenshot_filename: str
+    ) -> bool:
+        """
+        更新物流记录的截图信息
+        
+        Args:
+            tracking_number: 快递单号
+            screenshot_path: 截图文件路径
+            screenshot_filename: 截图文件名
+            
+        Returns:
+            更新是否成功
+        """
+        try:
+            tracking_info = self.get_tracking_by_number(tracking_number)
+            if tracking_info:
+                tracking_info.screenshot_path = screenshot_path
+                tracking_info.screenshot_filename = screenshot_filename
+                tracking_info.screenshot_generated_at = datetime.utcnow()
+                self.db.commit()
+                return True
+            return False
+        except Exception:
+            self.db.rollback()
+            return False
+    
     def should_refresh_tracking(self, tracking_info: TrackingInfo, refresh_threshold_minutes: int = 30) -> bool:
         """
         判断是否需要重新查询物流信息

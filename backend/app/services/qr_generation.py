@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.core.config import settings
+from app.services.delivery_receipt import DeliveryReceiptService
 
 
 class QRGenerationService:
@@ -17,6 +18,7 @@ class QRGenerationService:
     
     def __init__(self, db: Session):
         self.db = db
+        self.delivery_receipt_service = DeliveryReceiptService(db)
         self.legacy_dir = Path(__file__).parent.parent / "utils" / "legacy"
         self.template_path = self.legacy_dir / "template.png"
         
@@ -57,10 +59,26 @@ class QRGenerationService:
             # 合成最终标签
             final_label_path = self._compose_label(qr_path, barcode_path, output_dir, file_prefix)
             
+            # 保存路径信息用于数据库更新
+            qr_path_str = str(qr_path)
+            barcode_path_str = str(barcode_path)
+            
             # 清理中间文件
             self._cleanup_intermediate_files([qr_path, barcode_path])
             
             processing_time = time.time() - start_time
+            
+            # 尝试更新数据库中的送达回证记录
+            db_updated = False
+            receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
+            if receipt:
+                # 更新送达回证的二维码和条形码路径（注意：这里保存的是清理前的路径，实际文件已删除）
+                # 如果需要保留这些文件，可以注释掉上面的清理操作
+                updated_receipt = self.delivery_receipt_service.update_receipt_files(
+                    receipt_id=receipt.id,
+                    receipt_file_path=str(final_label_path)  # 只保存最终的合成标签路径
+                )
+                db_updated = updated_receipt is not None
             
             return {
                 "success": True,
@@ -69,8 +87,11 @@ class QRGenerationService:
                     "url": url,
                     "tracking_number": tracking_number,
                     "final_label_path": str(final_label_path),
+                    "qr_code_path": qr_path_str,
+                    "barcode_path": barcode_path_str,
                     "file_size": os.path.getsize(final_label_path),
-                    "processing_time": round(processing_time, 3)
+                    "processing_time": round(processing_time, 3),
+                    "db_updated": db_updated
                 }
             }
             
