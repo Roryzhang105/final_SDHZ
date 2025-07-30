@@ -95,7 +95,8 @@
               </div>
             </div>
             <div v-else-if="['tracking', 'delivered'].includes(taskInfo.status)">
-              <p class="processing-text">🔄 正在查询物流信息...</p>
+              <p class="error-text">❌ 查询失败</p>
+              <p class="error-detail">物流信息查询失败，请稍后重试</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待查询</p>
@@ -116,7 +117,7 @@
               <p>快递已成功签收，可以生成回证</p>
             </div>
             <div v-else-if="isStepCompleted('tracking')">
-              <p class="processing-text">📦 快递运输中</p>
+              <p class="error-text">❌ 物流查询失败</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待物流信息</p>
@@ -137,7 +138,7 @@
               <p>送达回证文档生成完成</p>
             </div>
             <div v-else-if="taskInfo.status === 'generating'">
-              <p class="processing-text">📝 正在生成文档...</p>
+              <p class="processing-text">📝 正在生成文档</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待生成</p>
@@ -392,6 +393,7 @@ import {
   ArrowLeft,
   FolderOpened
 } from '@element-plus/icons-vue'
+import { tasksApi } from '@/api/tasks'
 
 const route = useRoute()
 const router = useRouter()
@@ -497,46 +499,50 @@ const getTimelineType = (step: string) => {
 // 格式化日期时间
 const formatDateTime = (dateString: string) => {
   if (!dateString) return '-'
-  return new Date(dateString.replace(/-/g, '/')).toLocaleString('zh-CN')
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return '-'
+    }
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch (error) {
+    console.error('日期格式化失败:', error)
+    return '-'
+  }
 }
 
 // 获取任务详情
 const fetchTaskDetail = async (taskId: string) => {
   try {
-    // 模拟API调用
-    const mockData = {
-      task_id: taskId,
-      status: 'generating',
-      created_at: '2024-01-30 14:30:00',
-      updated_at: '2024-01-30 15:45:00',
-      image_url: '/uploads/image1.jpg',
-      qr_result: '1151242358360',
-      tracking_number: '1151242358360',
-      document_url: '',
-      screenshot_url: '/screenshots/tracking1.png',
-      error_message: ''
+    // 调用真实API
+    const response = await tasksApi.getTaskDetail(taskId)
+    
+    if (response.success) {
+      taskInfo.value = response.data
+      
+      // 设置表单数据的默认值
+      Object.assign(formData, {
+        doc_title: '送达回证',
+        sender: '',
+        send_location: '',
+        receiver: '',
+        send_time: '',
+        remarks: ''
+      })
+      
+      // 物流信息暂时为空，等待实现真实的物流查询
+      trackingInfo.value = null
+      
+    } else {
+      throw new Error(response.message || '获取任务详情失败')
     }
-    
-    taskInfo.value = mockData
-    
-    // 如果有快递单号，获取物流信息
-    if (mockData.tracking_number) {
-      trackingInfo.value = {
-        status: '运输中',
-        location: '北京市朝阳区',
-        update_time: '2024-01-30 15:30:00'
-      }
-    }
-    
-    // 设置表单数据
-    Object.assign(formData, {
-      doc_title: '送达回证',
-      sender: '张三',
-      send_location: '北京市朝阳区某某街道',
-      receiver: '李四',
-      send_time: '',
-      remarks: ''
-    })
     
   } catch (error) {
     console.error('获取任务详情失败:', error)

@@ -249,27 +249,34 @@ class TaskService:
             recognition_result = self.qr_service.recognize_single_image(task.image_path)
             print(f"二维码识别结果: {recognition_result}")
             
-            if recognition_result["is_success"] == "true" and recognition_result["tracking_numbers"]:
-                # 识别成功，提取第一个快递单号
-                first_tracking = recognition_result["tracking_numbers"][0]
-                tracking_number = first_tracking["number"]
-                courier_company = first_tracking["courier_name"]
-                
-                # 更新任务信息
+            if recognition_result["is_success"] == "true":
+                # 更新二维码内容
                 task.qr_code = recognition_result["qr_contents"][0] if recognition_result["qr_contents"] else recognition_result["raw_results"][0] if recognition_result["raw_results"] else ""
-                task.tracking_number = tracking_number
-                task.courier_company = courier_company
-                task.status = TaskStatusEnum.TRACKING
                 
-                print(f"识别成功 - 快递单号: {tracking_number}, 快递公司: {courier_company}")
-                
-                # TODO: 触发物流跟踪
-                # await self._trigger_tracking(task)
+                if recognition_result["tracking_numbers"]:
+                    # 识别成功并提取到快递单号
+                    first_tracking = recognition_result["tracking_numbers"][0]
+                    tracking_number = first_tracking["number"]
+                    courier_company = first_tracking["courier_name"]
+                    
+                    task.tracking_number = tracking_number
+                    task.courier_company = courier_company
+                    task.status = TaskStatusEnum.TRACKING
+                    
+                    print(f"识别成功 - 快递单号: {tracking_number}, 快递公司: {courier_company}")
+                    
+                    # TODO: 触发物流跟踪
+                    # await self._trigger_tracking(task)
+                else:
+                    # 识别到二维码但未提取到快递单号
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = "二维码识别成功，但未能从中提取到快递单号"
+                    print(f"部分失败: 识别到二维码但未提取到快递单号")
                 
             else:
                 # 识别失败
                 task.status = TaskStatusEnum.FAILED
-                task.error_message = recognition_result.get("error_message", "未能识别到二维码或快递单号")
+                task.error_message = recognition_result.get("error_message", "未能识别到二维码")
                 print(f"识别失败: {task.error_message}")
             
             self.db.commit()

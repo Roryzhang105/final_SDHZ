@@ -52,6 +52,15 @@ class QRRecognitionService:
                 "examples": ["123456789012"]
             },
             {
+                "courier_name": "EMS数字单号",
+                "courier_code": "ems_number",
+                "pattern_regex": r"^\d{13}$",
+                "pattern_length": 13,
+                "pattern_prefix": "",
+                "description": "EMS数字单号：13位数字",
+                "examples": ["1151242358360"]
+            },
+            {
                 "courier_name": "通用数字单号",
                 "courier_code": "generic_number",
                 "pattern_regex": r"^\d{10,18}$",
@@ -148,19 +157,40 @@ class QRRecognitionService:
             if not text:
                 continue
                 
+            # 先尝试从URL中提取快递单号
+            extracted_number = self._extract_tracking_from_url(text)
+            
             # 尝试匹配快递单号
             matched_tracking = False
-            for pattern in patterns:
-                if pattern.pattern_regex:
-                    if re.match(pattern.pattern_regex, text):
-                        tracking_numbers.append({
-                            "number": text,
-                            "courier_name": pattern.courier_name,
-                            "courier_code": pattern.courier_code,
-                            "pattern_matched": pattern.pattern_regex
-                        })
-                        matched_tracking = True
-                        break
+            
+            # 如果从URL提取到了数字，尝试匹配模式
+            if extracted_number:
+                for pattern in patterns:
+                    if pattern.pattern_regex:
+                        if re.match(pattern.pattern_regex, extracted_number):
+                            tracking_numbers.append({
+                                "number": extracted_number,
+                                "courier_name": pattern.courier_name,
+                                "courier_code": pattern.courier_code,
+                                "pattern_matched": pattern.pattern_regex,
+                                "source_url": text  # 保存原始URL
+                            })
+                            matched_tracking = True
+                            break
+            
+            # 如果没有从URL提取到，直接匹配原文本
+            if not matched_tracking:
+                for pattern in patterns:
+                    if pattern.pattern_regex:
+                        if re.match(pattern.pattern_regex, text):
+                            tracking_numbers.append({
+                                "number": text,
+                                "courier_name": pattern.courier_name,
+                                "courier_code": pattern.courier_code,
+                                "pattern_matched": pattern.pattern_regex
+                            })
+                            matched_tracking = True
+                            break
             
             # 如果不是快递单号，按内容特征分类
             if not matched_tracking:
@@ -232,6 +262,46 @@ class QRRecognitionService:
         score += detection_bonus
         
         return min(score, 1.0)
+    
+    def _extract_tracking_from_url(self, text: str) -> Optional[str]:
+        """从URL中提取快递单号"""
+        try:
+            # 检查是否为URL
+            if text.startswith(('http://', 'https://')):
+                # 从URL路径中提取数字
+                import urllib.parse
+                parsed = urllib.parse.urlparse(text)
+                path_parts = parsed.path.split('/')
+                
+                # 查找路径中的数字部分，支持更广泛的长度范围
+                for part in reversed(path_parts):
+                    if part.isdigit() and len(part) >= 8:  # 降低最小长度要求
+                        print(f"从URL {text} 提取到快递单号: {part}")
+                        return part
+                
+                # 从查询参数中查找
+                if parsed.query:
+                    query_params = urllib.parse.parse_qs(parsed.query)
+                    for key, values in query_params.items():
+                        for value in values:
+                            if value.isdigit() and len(value) >= 8:  # 降低最小长度要求
+                                print(f"从URL查询参数提取到快递单号: {value}")
+                                return value
+                
+                # 如果路径和查询参数都没找到，尝试从整个URL中提取数字
+                import re
+                number_matches = re.findall(r'\d{8,}', text)  # 查找8位以上的数字
+                if number_matches:
+                    # 返回最长的数字串
+                    longest_number = max(number_matches, key=len)
+                    print(f"从URL整体提取到快递单号: {longest_number}")
+                    return longest_number
+            
+            return None
+            
+        except Exception as e:
+            print(f"从URL提取快递单号失败: {e}")
+            return None
     
     def _save_recognition_result(self, task_id: int, result_data: Dict[str, Any]):
         """保存识别结果到数据库"""

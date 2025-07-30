@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import os
 
 from app.core.config import settings
 from app.core.database import engine
@@ -14,6 +16,8 @@ from app.models import Task, User, DeliveryReceipt, Courier, TrackingInfo, Recog
 async def lifespan(app: FastAPI):
     # 启动时创建数据库表
     Base.metadata.create_all(bind=engine)
+    # 确保上传目录存在
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     yield
     # 关闭时清理资源
 
@@ -49,6 +53,10 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+# 配置静态文件服务
+uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
+app.mount("/static/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)

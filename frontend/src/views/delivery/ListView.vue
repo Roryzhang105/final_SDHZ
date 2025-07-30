@@ -338,7 +338,23 @@ const getStepIndex = (status: string) => {
 // 格式化日期时间
 const formatDateTime = (dateString: string) => {
   if (!dateString) return '-'
-  return new Date(dateString.replace(/-/g, '/')).toLocaleString('zh-CN')
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return '-'
+    }
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch (error) {
+    console.error('日期格式化失败:', error)
+    return '-'
+  }
 }
 
 // 处理搜索
