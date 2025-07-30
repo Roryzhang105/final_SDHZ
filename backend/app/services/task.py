@@ -10,6 +10,7 @@ import shutil
 from app.models.task import Task, TaskStatusEnum
 from app.services.file import FileService
 from app.services.qr_recognition import QRRecognitionService
+from app.services.express_tracking import ExpressTrackingService
 from app.core.config import settings
 
 
@@ -20,6 +21,7 @@ class TaskService:
         self.db = db
         self.file_service = FileService(db)
         self.qr_service = QRRecognitionService(db)
+        self.tracking_service = ExpressTrackingService(db)
     
     async def create_task_from_upload(self, file: UploadFile, user_id: Optional[int] = None) -> Dict[str, Any]:
         """从上传的文件创建任务"""
@@ -265,8 +267,8 @@ class TaskService:
                     
                     print(f"识别成功 - 快递单号: {tracking_number}, 快递公司: {courier_company}")
                     
-                    # TODO: 触发物流跟踪
-                    # await self._trigger_tracking(task)
+                    # 触发物流跟踪
+                    await self._trigger_tracking(task)
                 else:
                     # 识别到二维码但未提取到快递单号
                     task.status = TaskStatusEnum.FAILED
@@ -288,4 +290,60 @@ class TaskService:
             
             task.status = TaskStatusEnum.FAILED
             task.error_message = f"二维码识别失败: {str(e)}"
+            self.db.commit()
+    
+    async def _trigger_tracking(self, task: Task):
+        """触发物流跟踪处理"""
+        try:
+            print(f"开始物流查询 - 任务: {task.task_id}, 快递单号: {task.tracking_number}")
+            
+            # 查询物流信息
+            company_code = "ems"  # 根据实际情况确定快递公司代码
+            tracking_result = self.tracking_service.query_express(task.tracking_number, company_code)
+            print(f"物流查询结果: {tracking_result}")
+            
+            if tracking_result.get("success"):
+                # 更新物流数据 - 保存完整的tracking_result作为tracking_data
+                task.tracking_data = tracking_result
+                task.delivery_status = tracking_result.get("current_status", "")
+                
+                # 检查是否已签收 - 从顶层获取is_signed字段
+                if tracking_result.get("is_signed"):
+                    task.status = TaskStatusEnum.DELIVERED
+                    # 解析签收时间
+                    sign_time_str = tracking_result.get("sign_time", "")
+                    if sign_time_str:
+                        try:
+                            # 处理不同的时间格式
+                            if "T" in sign_time_str:
+                                task.delivery_time = datetime.fromisoformat(sign_time_str)
+                            else:
+                                task.delivery_time = datetime.strptime(sign_time_str, "%Y-%m-%d %H:%M:%S")
+                        except Exception as e:
+                            print(f"解析签收时间失败: {e}")
+                            task.delivery_time = datetime.now()
+                    else:
+                        task.delivery_time = datetime.now()
+                    
+                    print(f"快递已签收 - 任务: {task.task_id}, 签收时间: {task.delivery_time}")
+                    
+                    # TODO: 触发后续处理（生成截图、回证等）
+                    # await self._trigger_document_generation(task)
+                else:
+                    # 保持追踪状态，等待后续检查
+                    print(f"快递尚未签收 - 任务: {task.task_id}, 当前状态: {task.delivery_status}")
+                
+            else:
+                # 查询失败，但不标记任务失败，可能是临时问题
+                task.error_message = f"物流查询失败: {tracking_result.get('message', '未知错误')}"
+                print(f"物流查询失败: {task.error_message}")
+            
+            self.db.commit()
+            
+        except Exception as e:
+            print(f"物流查询处理失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            task.error_message = f"物流查询失败: {str(e)}"
             self.db.commit()

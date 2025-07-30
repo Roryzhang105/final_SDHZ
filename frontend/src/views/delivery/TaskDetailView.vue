@@ -38,10 +38,10 @@
             <p>已上传图片文件</p>
             <div v-if="taskInfo.image_url" class="timeline-image">
               <el-image
-                :src="taskInfo.image_url"
+                :src="getImageUrl(taskInfo.image_url)"
                 fit="cover"
                 style="width: 100px; height: 80px; border-radius: 4px;"
-                :preview-src-list="[taskInfo.image_url]"
+                :preview-src-list="[getImageUrl(taskInfo.image_url)]"
               >
                 <template #error>
                   <div class="image-error">图片加载失败</div>
@@ -59,10 +59,13 @@
         >
           <div class="timeline-content">
             <h4>二维码识别</h4>
-            <div v-if="taskInfo.qr_result">
+            <div v-if="taskInfo.qr_code || taskInfo.tracking_number">
               <p class="success-text">✓ 识别成功</p>
               <div class="qr-result">
-                <strong>识别结果:</strong> {{ taskInfo.qr_result }}
+                <strong>识别结果:</strong> {{ taskInfo.qr_code }}
+              </div>
+              <div v-if="taskInfo.tracking_number" class="tracking-number">
+                <strong>快递单号:</strong> {{ taskInfo.tracking_number }}
               </div>
             </div>
             <div v-else-if="taskInfo.status === 'recognizing'">
@@ -86,17 +89,47 @@
         >
           <div class="timeline-content">
             <h4>物流查询</h4>
-            <div v-if="trackingInfo">
+            <div v-if="taskInfo.tracking_data && taskInfo.delivery_status">
               <p class="success-text">✓ 查询成功</p>
               <div class="tracking-info">
-                <p><strong>当前状态:</strong> {{ trackingInfo.status }}</p>
-                <p><strong>最新位置:</strong> {{ trackingInfo.location }}</p>
-                <p><strong>更新时间:</strong> {{ trackingInfo.update_time }}</p>
+                <p><strong>当前状态:</strong> {{ taskInfo.delivery_status }}</p>
+                <p v-if="taskInfo.tracking_data.traces && taskInfo.tracking_data.traces.length > 0">
+                  <strong>最新位置:</strong> {{ taskInfo.tracking_data.traces[0].areaName || '未知' }}
+                </p>
+                <p v-if="taskInfo.delivery_time">
+                  <strong>签收时间:</strong> {{ formatDateTime(taskInfo.delivery_time) }}
+                </p>
+                <p v-if="taskInfo.tracking_data.is_signed">
+                  <span class="success-text">📦 快递已签收</span>
+                </p>
+                <!-- 物流轨迹预览 -->
+                <div v-if="taskInfo.tracking_data.traces && taskInfo.tracking_data.traces.length > 0" class="tracking-timeline">
+                  <p><strong>物流轨迹:</strong></p>
+                  <div class="timeline-preview">
+                    <div 
+                      v-for="(trace, index) in taskInfo.tracking_data.traces.slice(0, 3)" 
+                      :key="index"
+                      class="timeline-item"
+                    >
+                      <span class="timeline-time">{{ trace.ftime }}</span>
+                      <span class="timeline-content">{{ trace.context }}</span>
+                    </div>
+                    <div v-if="taskInfo.tracking_data.traces.length > 3" class="timeline-more">
+                      ...还有{{ taskInfo.tracking_data.traces.length - 3 }}条记录
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div v-else-if="['tracking', 'delivered'].includes(taskInfo.status)">
+            <div v-else-if="taskInfo.status === 'tracking'">
+              <p class="processing-text">🔄 正在查询中...</p>
+            </div>
+            <div v-else-if="['tracking', 'delivered'].includes(taskInfo.status) && taskInfo.error_message">
               <p class="error-text">❌ 查询失败</p>
-              <p class="error-detail">物流信息查询失败，请稍后重试</p>
+              <p class="error-detail">{{ taskInfo.error_message }}</p>
+            </div>
+            <div v-else-if="!taskInfo.tracking_number">
+              <p class="pending-text">⏳ 等待识别快递单号</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待查询</p>
@@ -518,6 +551,18 @@ const formatDateTime = (dateString: string) => {
   }
 }
 
+// 获取图片URL
+const getImageUrl = (imageUrl: string) => {
+  if (!imageUrl) return ''
+  // 如果已经是完整URL，直接返回
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  // 如果是相对路径，拼接后端地址
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+  return imageUrl.startsWith('/') ? `${baseUrl}${imageUrl}` : `${baseUrl}/${imageUrl}`
+}
+
 // 获取任务详情
 const fetchTaskDetail = async (taskId: string) => {
   try {
@@ -748,6 +793,14 @@ onMounted(() => {
   font-family: monospace;
 }
 
+.tracking-number {
+  background-color: #f0f9ff;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-family: monospace;
+}
+
 .tracking-info {
   background-color: #f0f9ff;
   padding: 10px;
@@ -757,6 +810,41 @@ onMounted(() => {
 
 .tracking-info p {
   margin: 5px 0;
+}
+
+.tracking-timeline {
+  margin-top: 15px;
+}
+
+.timeline-preview {
+  background-color: #fafafa;
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.timeline-item {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.timeline-time {
+  color: #909399;
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.timeline-content {
+  color: #606266;
+}
+
+.timeline-more {
+  color: #909399;
+  font-size: 11px;
+  text-align: center;
+  margin-top: 8px;
 }
 
 .success-text {

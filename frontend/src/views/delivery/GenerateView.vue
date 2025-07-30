@@ -62,27 +62,14 @@
         </p>
       </div>
       
-      <!-- 操作按钮 -->
-      <div class="action-buttons" v-if="fileList.length > 0">
-        <el-button
-          type="primary"
-          size="large"
-          :loading="uploading"
-          :disabled="fileList.length === 0"
-          @click="handleBatchUpload"
-        >
-          <el-icon><Upload /></el-icon>
-          {{ uploading ? '上传中...' : `开始处理 (${fileList.length}张图片)` }}
-        </el-button>
-        
-        <el-button
-          size="large"
-          @click="clearAll"
-          :disabled="uploading"
-        >
-          <el-icon><Delete /></el-icon>
-          清空所有
-        </el-button>
+      <!-- 提示信息 -->
+      <div v-if="fileList.length > 0 && !uploading" class="upload-tip">
+        <el-alert
+          title="图片上传后将自动创建处理任务"
+          type="info"
+          :closable="false"
+          show-icon
+        />
       </div>
     </el-card>
     
@@ -247,7 +234,7 @@ const handleUploadSuccess: UploadProps['onSuccess'] = (response, file) => {
       taskId: response.data?.task_id,
       qrCode: response.data?.qr_code
     })
-    ElMessage.success(`图片 ${file.name} 上传并处理成功!`)
+    ElMessage.success(`图片 ${file.name} 成功上传并创造任务！`)
   } else {
     uploadResults.value.push({
       id: file.uid || Date.now().toString(),
@@ -284,54 +271,7 @@ const handleRemove: UploadProps['onRemove'] = (file) => {
   return true
 }
 
-// 批量上传处理
-const handleBatchUpload = async () => {
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请先选择要上传的图片')
-    return
-  }
-
-  try {
-    uploading.value = true
-    uploadProgress.value = 0
-    
-    // 清空之前的结果
-    uploadResults.value = []
-    
-    // 触发上传
-    uploadRef.value?.submit()
-    
-  } catch (error) {
-    console.error('Upload failed:', error)
-    ElMessage.error('上传失败，请重试')
-  } finally {
-    uploading.value = false
-  }
-}
-
-// 清空所有文件
-const clearAll = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '确定要清空所有文件吗？',
-      '提示',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    
-    uploadRef.value?.clearFiles()
-    fileList.value = []
-    uploadResults.value = []
-    uploadProgress.value = 0
-    
-    ElMessage.success('已清空所有文件')
-  } catch {
-    // 用户取消
-  }
-}
+// 注意：上传现在是自动触发的，不需要手动批量上传
 
 // 跳转到任务列表
 const goToTaskList = () => {
@@ -362,6 +302,10 @@ const goToTaskList = () => {
 .upload-tips li {
   margin: 5px 0;
   color: #606266;
+}
+
+.upload-tip {
+  margin: 15px 0;
 }
 
 .upload-container {

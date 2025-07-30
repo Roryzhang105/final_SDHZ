@@ -110,10 +110,13 @@ async def get_task_detail(
             "tracking_number": task.tracking_number,
             "courier_company": task.courier_company,
             "delivery_status": task.delivery_status,
+            "delivery_time": task.delivery_time.isoformat() if task.delivery_time else None,
+            "tracking_data": task.tracking_data,
             "document_url": task.document_url,
             "screenshot_url": task.screenshot_url,
             "error_message": task.error_message,
             "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "processing_time": task.processing_time
         }
