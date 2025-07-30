@@ -423,8 +423,7 @@ const handleUploadNew = () => {
 
 // 处理查看详情
 const handleView = (row: any) => {
-  currentTask.value = row
-  dialogVisible.value = true
+  router.push(`/delivery/detail/${row.task_id}`)
 }
 
 // 处理下载

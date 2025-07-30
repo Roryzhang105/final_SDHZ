@@ -1,0 +1,882 @@
+<template>
+  <div class="task-detail">
+    <!-- 顶部基本信息 -->
+    <el-card class="info-card" shadow="hover">
+      <div class="task-header">
+        <div class="header-left">
+          <h2>任务详情</h2>
+          <p class="task-id">任务ID: {{ taskInfo.task_id }}</p>
+        </div>
+        <div class="header-right">
+          <el-tag 
+            :type="getStatusType(taskInfo.status)"
+            size="large"
+            class="status-tag"
+          >
+            {{ getStatusText(taskInfo.status) }}
+          </el-tag>
+          <p class="create-time">创建时间: {{ formatDateTime(taskInfo.created_at) }}</p>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 进度时间线 -->
+    <el-card class="timeline-card" shadow="hover">
+      <template #header>
+        <span>处理进度</span>
+      </template>
+      
+      <el-timeline class="process-timeline">
+        <el-timeline-item
+          :type="getTimelineType('uploaded')"
+          :hollow="!isStepCompleted('uploaded')"
+          timestamp="图片上传"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>图片上传 ✓</h4>
+            <p>已上传图片文件</p>
+            <div v-if="taskInfo.image_url" class="timeline-image">
+              <el-image
+                :src="taskInfo.image_url"
+                fit="cover"
+                style="width: 100px; height: 80px; border-radius: 4px;"
+                :preview-src-list="[taskInfo.image_url]"
+              >
+                <template #error>
+                  <div class="image-error">图片加载失败</div>
+                </template>
+              </el-image>
+            </div>
+          </div>
+        </el-timeline-item>
+
+        <el-timeline-item
+          :type="getTimelineType('recognized')"
+          :hollow="!isStepCompleted('recognized')"
+          timestamp="二维码识别"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>二维码识别</h4>
+            <div v-if="taskInfo.qr_result">
+              <p class="success-text">✓ 识别成功</p>
+              <div class="qr-result">
+                <strong>识别结果:</strong> {{ taskInfo.qr_result }}
+              </div>
+            </div>
+            <div v-else-if="taskInfo.status === 'recognizing'">
+              <p class="processing-text">🔄 正在识别中...</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'failed'">
+              <p class="error-text">❌ 识别失败</p>
+              <p class="error-detail">{{ taskInfo.error_message }}</p>
+            </div>
+            <div v-else>
+              <p class="pending-text">⏳ 等待识别</p>
+            </div>
+          </div>
+        </el-timeline-item>
+
+        <el-timeline-item
+          :type="getTimelineType('tracking')"
+          :hollow="!isStepCompleted('tracking')"
+          timestamp="物流查询"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>物流查询</h4>
+            <div v-if="trackingInfo">
+              <p class="success-text">✓ 查询成功</p>
+              <div class="tracking-info">
+                <p><strong>当前状态:</strong> {{ trackingInfo.status }}</p>
+                <p><strong>最新位置:</strong> {{ trackingInfo.location }}</p>
+                <p><strong>更新时间:</strong> {{ trackingInfo.update_time }}</p>
+              </div>
+            </div>
+            <div v-else-if="['tracking', 'delivered'].includes(taskInfo.status)">
+              <p class="processing-text">🔄 正在查询物流信息...</p>
+            </div>
+            <div v-else>
+              <p class="pending-text">⏳ 等待查询</p>
+            </div>
+          </div>
+        </el-timeline-item>
+
+        <el-timeline-item
+          :type="getTimelineType('delivered')"
+          :hollow="!isStepCompleted('delivered')"
+          timestamp="等待签收"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>等待签收</h4>
+            <div v-if="taskInfo.status === 'delivered'">
+              <p class="success-text">✓ 已签收</p>
+              <p>快递已成功签收，可以生成回证</p>
+            </div>
+            <div v-else-if="isStepCompleted('tracking')">
+              <p class="processing-text">📦 快递运输中</p>
+            </div>
+            <div v-else>
+              <p class="pending-text">⏳ 等待物流信息</p>
+            </div>
+          </div>
+        </el-timeline-item>
+
+        <el-timeline-item
+          :type="getTimelineType('generating')"
+          :hollow="!isStepCompleted('generating')"
+          timestamp="生成文档"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>生成文档</h4>
+            <div v-if="taskInfo.status === 'completed'">
+              <p class="success-text">✓ 文档已生成</p>
+              <p>送达回证文档生成完成</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'generating'">
+              <p class="processing-text">📝 正在生成文档...</p>
+            </div>
+            <div v-else>
+              <p class="pending-text">⏳ 等待生成</p>
+            </div>
+          </div>
+        </el-timeline-item>
+
+        <el-timeline-item
+          :type="getTimelineType('completed')"
+          :hollow="!isStepCompleted('completed')"
+          timestamp="任务完成"
+          placement="top"
+        >
+          <div class="timeline-content">
+            <h4>任务完成</h4>
+            <div v-if="taskInfo.status === 'completed'">
+              <p class="success-text">🎉 任务处理完成</p>
+              <p>所有步骤已完成，可下载相关文件</p>
+            </div>
+            <div v-else>
+              <p class="pending-text">⏳ 等待完成</p>
+            </div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+    </el-card>
+
+    <el-row :gutter="20">
+      <!-- 表单信息区域 -->
+      <el-col :xs="24" :lg="12">
+        <el-card class="form-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>回证信息</span>
+              <el-button 
+                type="text" 
+                :icon="Edit"
+                @click="toggleEdit"
+              >
+                {{ isEditing ? '取消编辑' : '编辑信息' }}
+              </el-button>
+            </div>
+          </template>
+
+          <el-form
+            ref="formRef"
+            :model="formData"
+            :rules="formRules"
+            label-width="100px"
+            :disabled="!isEditing"
+          >
+            <el-form-item label="文书标题" prop="doc_title">
+              <el-input
+                v-model="formData.doc_title"
+                placeholder="例如：送达回证"
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item label="送达人" prop="sender">
+              <el-input
+                v-model="formData.sender"
+                placeholder="请输入送达人姓名"
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item label="送达地点" prop="send_location">
+              <el-input
+                v-model="formData.send_location"
+                placeholder="请输入送达地点"
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item label="受送达人" prop="receiver">
+              <el-input
+                v-model="formData.receiver"
+                placeholder="请输入受送达人姓名"
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item label="送达时间" prop="send_time">
+              <el-date-picker
+                v-model="formData.send_time"
+                type="datetime"
+                placeholder="选择送达时间"
+                format="YYYY-MM-DD HH:mm:ss"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+              />
+              <div class="form-tip">
+                留空将自动从物流数据中获取签收时间
+              </div>
+            </el-form-item>
+
+            <el-form-item label="备注" prop="remarks">
+              <el-input
+                v-model="formData.remarks"
+                type="textarea"
+                :rows="3"
+                placeholder="请输入备注信息"
+              />
+            </el-form-item>
+
+            <el-form-item v-if="isEditing">
+              <el-button type="primary" :loading="saving" @click="handleSaveForm">
+                <el-icon><Check /></el-icon>
+                保存信息
+              </el-button>
+              <el-button @click="handleCancelEdit">
+                <el-icon><Close /></el-icon>
+                取消
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-col>
+
+      <!-- 文件下载区域 -->
+      <el-col :xs="24" :lg="12">
+        <el-card class="download-card" shadow="hover">
+          <template #header>
+            <span>相关文件</span>
+          </template>
+
+          <div class="download-list">
+            <!-- 送达回证文档 -->
+            <div class="download-item">
+              <div class="file-info">
+                <el-icon class="file-icon" color="#409EFF"><Document /></el-icon>
+                <div class="file-details">
+                  <h4>送达回证</h4>
+                  <p class="file-desc">Word文档格式</p>
+                </div>
+              </div>
+              <div class="file-actions">
+                <el-button
+                  v-if="taskInfo.status === 'completed' && taskInfo.document_url"
+                  type="success"
+                  :icon="Download"
+                  @click="handleDownload('document')"
+                >
+                  下载
+                </el-button>
+                <el-button
+                  v-else-if="canGenerateManually"
+                  type="warning"
+                  :icon="DocumentAdd"
+                  :loading="generating"
+                  @click="handleManualGenerate"
+                >
+                  手动生成
+                </el-button>
+                <el-tag v-else type="info">未生成</el-tag>
+              </div>
+            </div>
+
+            <!-- 物流截图 -->
+            <div class="download-item">
+              <div class="file-info">
+                <el-icon class="file-icon" color="#67C23A"><Picture /></el-icon>
+                <div class="file-details">
+                  <h4>物流截图</h4>
+                  <p class="file-desc">PNG图片格式</p>
+                </div>
+              </div>
+              <div class="file-actions">
+                <el-button
+                  v-if="taskInfo.screenshot_url"
+                  type="success"
+                  :icon="Download"
+                  @click="handleDownload('screenshot')"
+                >
+                  下载
+                </el-button>
+                <el-tag v-else type="info">未生成</el-tag>
+              </div>
+            </div>
+
+            <!-- 上传的原图 -->
+            <div class="download-item">
+              <div class="file-info">
+                <el-icon class="file-icon" color="#E6A23C"><Camera /></el-icon>
+                <div class="file-details">
+                  <h4>上传的图片</h4>
+                  <p class="file-desc">原始图片文件</p>
+                </div>
+              </div>
+              <div class="file-actions">
+                <el-button
+                  v-if="taskInfo.image_url"
+                  type="primary"
+                  :icon="Download"
+                  @click="handleDownload('image')"
+                >
+                  下载
+                </el-button>
+                <el-tag v-else type="info">未找到</el-tag>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 操作按钮 -->
+    <div class="action-buttons">
+      <el-button size="large" @click="handleBack">
+        <el-icon><ArrowLeft /></el-icon>
+        返回列表
+      </el-button>
+      
+      <el-button 
+        v-if="canGenerateManually"
+        type="warning" 
+        size="large"
+        :loading="generating"
+        @click="handleManualGenerate"
+      >
+        <el-icon><DocumentAdd /></el-icon>
+        手动生成回证
+      </el-button>
+
+      <el-button 
+        v-if="taskInfo.status === 'completed'"
+        type="success" 
+        size="large"
+        @click="handleDownloadAll"
+      >
+        <el-icon><FolderOpened /></el-icon>
+        下载所有文件
+      </el-button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import {
+  Edit,
+  Check,
+  Close,
+  Download,
+  Document,
+  DocumentAdd,
+  Picture,
+  Camera,
+  ArrowLeft,
+  FolderOpened
+} from '@element-plus/icons-vue'
+
+const route = useRoute()
+const router = useRouter()
+
+// 响应式数据
+const taskInfo = ref({
+  task_id: '',
+  status: 'pending',
+  created_at: '',
+  updated_at: '',
+  image_url: '',
+  qr_result: '',
+  tracking_number: '',
+  document_url: '',
+  screenshot_url: '',
+  error_message: ''
+})
+
+const trackingInfo = ref(null)
+const isEditing = ref(false)
+const saving = ref(false)
+const generating = ref(false)
+const formRef = ref<FormInstance>()
+
+// 表单数据
+const formData = reactive({
+  doc_title: '送达回证',
+  sender: '',
+  send_location: '',
+  receiver: '',
+  send_time: '',
+  remarks: ''
+})
+
+// 表单验证规则
+const formRules: FormRules = {
+  doc_title: [
+    { required: true, message: '请输入文书标题', trigger: 'blur' }
+  ]
+}
+
+// 任务状态映射
+const statusMap = {
+  pending: { text: '待处理', type: 'info' },
+  recognizing: { text: '识别中', type: 'warning' },
+  tracking: { text: '查询物流中', type: 'warning' },
+  delivered: { text: '已签收', type: 'success' },
+  generating: { text: '生成文档中', type: 'warning' },
+  completed: { text: '已完成', type: 'success' },
+  failed: { text: '失败', type: 'danger' }
+}
+
+// 计算属性
+const canGenerateManually = computed(() => {
+  return taskInfo.value.status === 'delivered' && !taskInfo.value.document_url
+})
+
+// 获取状态类型
+const getStatusType = (status: string) => {
+  return statusMap[status]?.type || 'info'
+}
+
+// 获取状态文本
+const getStatusText = (status: string) => {
+  return statusMap[status]?.text || '未知'
+}
+
+// 判断步骤是否完成
+const isStepCompleted = (step: string) => {
+  const stepOrder = ['uploaded', 'recognized', 'tracking', 'delivered', 'generating', 'completed']
+  const currentIndex = stepOrder.indexOf(getStepFromStatus(taskInfo.value.status))
+  const stepIndex = stepOrder.indexOf(step)
+  
+  if (taskInfo.value.status === 'failed') {
+    return step === 'uploaded' // 失败状态下只有上传是完成的
+  }
+  
+  return stepIndex <= currentIndex
+}
+
+// 从状态获取步骤
+const getStepFromStatus = (status: string) => {
+  const statusStepMap = {
+    pending: 'uploaded',
+    recognizing: 'uploaded',
+    tracking: 'recognized',
+    delivered: 'tracking',
+    generating: 'delivered',
+    completed: 'completed',
+    failed: 'uploaded'
+  }
+  return statusStepMap[status] || 'uploaded'
+}
+
+// 获取时间线类型
+const getTimelineType = (step: string) => {
+  if (taskInfo.value.status === 'failed' && step !== 'uploaded') {
+    return 'danger'
+  }
+  return isStepCompleted(step) ? 'success' : 'info'
+}
+
+// 格式化日期时间
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return '-'
+  return new Date(dateString.replace(/-/g, '/')).toLocaleString('zh-CN')
+}
+
+// 获取任务详情
+const fetchTaskDetail = async (taskId: string) => {
+  try {
+    // 模拟API调用
+    const mockData = {
+      task_id: taskId,
+      status: 'generating',
+      created_at: '2024-01-30 14:30:00',
+      updated_at: '2024-01-30 15:45:00',
+      image_url: '/uploads/image1.jpg',
+      qr_result: '1151242358360',
+      tracking_number: '1151242358360',
+      document_url: '',
+      screenshot_url: '/screenshots/tracking1.png',
+      error_message: ''
+    }
+    
+    taskInfo.value = mockData
+    
+    // 如果有快递单号，获取物流信息
+    if (mockData.tracking_number) {
+      trackingInfo.value = {
+        status: '运输中',
+        location: '北京市朝阳区',
+        update_time: '2024-01-30 15:30:00'
+      }
+    }
+    
+    // 设置表单数据
+    Object.assign(formData, {
+      doc_title: '送达回证',
+      sender: '张三',
+      send_location: '北京市朝阳区某某街道',
+      receiver: '李四',
+      send_time: '',
+      remarks: ''
+    })
+    
+  } catch (error) {
+    console.error('获取任务详情失败:', error)
+    ElMessage.error('获取任务详情失败')
+  }
+}
+
+// 切换编辑模式
+const toggleEdit = () => {
+  isEditing.value = !isEditing.value
+}
+
+// 保存表单
+const handleSaveForm = async () => {
+  if (!formRef.value) return
+  
+  try {
+    await formRef.value.validate()
+    saving.value = true
+    
+    // 模拟保存API调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    ElMessage.success('信息保存成功')
+    isEditing.value = false
+  } catch (error) {
+    console.error('保存失败:', error)
+  } finally {
+    saving.value = false
+  }
+}
+
+// 取消编辑
+const handleCancelEdit = () => {
+  isEditing.value = false
+  // 重置表单数据
+}
+
+// 手动生成回证
+const handleManualGenerate = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要手动生成送达回证吗？',
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    generating.value = true
+    
+    // 模拟生成API调用
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    taskInfo.value.status = 'completed'
+    taskInfo.value.document_url = '/documents/receipt.docx'
+    
+    ElMessage.success('回证生成成功！')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('生成失败:', error)
+      ElMessage.error('生成失败，请重试')
+    }
+  } finally {
+    generating.value = false
+  }
+}
+
+// 下载文件
+const handleDownload = async (type: 'document' | 'screenshot' | 'image') => {
+  try {
+    const fileMap = {
+      document: { url: taskInfo.value.document_url, name: `送达回证_${taskInfo.value.tracking_number}.docx` },
+      screenshot: { url: taskInfo.value.screenshot_url, name: `物流截图_${taskInfo.value.tracking_number}.png` },
+      image: { url: taskInfo.value.image_url, name: `原图_${taskInfo.value.task_id}.jpg` }
+    }
+    
+    const file = fileMap[type]
+    if (!file.url) {
+      ElMessage.warning('文件不存在')
+      return
+    }
+    
+    // 模拟下载
+    ElMessage.success(`开始下载 ${file.name}`)
+    
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败')
+  }
+}
+
+// 下载所有文件
+const handleDownloadAll = async () => {
+  try {
+    ElMessage.success('开始打包下载所有文件')
+    // 实际项目中调用打包下载API
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败')
+  }
+}
+
+// 返回列表
+const handleBack = () => {
+  router.push('/delivery/list')
+}
+
+// 组件挂载时获取数据
+onMounted(() => {
+  const taskId = route.params.id as string
+  if (taskId) {
+    fetchTaskDetail(taskId)
+  } else {
+    ElMessage.error('任务ID不存在')
+    router.push('/delivery/list')
+  }
+})
+</script>
+
+<style scoped>
+.task-detail {
+  padding: 20px;
+}
+
+.info-card {
+  margin-bottom: 20px;
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.header-left h2 {
+  margin: 0 0 5px 0;
+  font-size: 24px;
+  color: #333;
+}
+
+.task-id {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.header-right {
+  text-align: right;
+}
+
+.status-tag {
+  margin-bottom: 10px;
+}
+
+.create-time {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.timeline-card {
+  margin-bottom: 20px;
+}
+
+.process-timeline {
+  padding: 20px 0;
+}
+
+.timeline-content h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.timeline-content p {
+  margin: 5px 0;
+  color: #666;
+}
+
+.timeline-image {
+  margin-top: 10px;
+}
+
+.image-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 80px;
+  background-color: #f5f7fa;
+  color: #909399;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.qr-result {
+  background-color: #f0f9ff;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-family: monospace;
+}
+
+.tracking-info {
+  background-color: #f0f9ff;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.tracking-info p {
+  margin: 5px 0;
+}
+
+.success-text {
+  color: #67c23a;
+  font-weight: bold;
+}
+
+.processing-text {
+  color: #e6a23c;
+  font-weight: bold;
+}
+
+.error-text {
+  color: #f56c6c;
+  font-weight: bold;
+}
+
+.pending-text {
+  color: #909399;
+}
+
+.error-detail {
+  color: #f56c6c;
+  font-size: 12px;
+}
+
+.form-card, .download-card {
+  height: fit-content;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
+}
+
+.download-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.download-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.download-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.file-icon {
+  font-size: 32px;
+}
+
+.file-details h4 {
+  margin: 0 0 5px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.file-desc {
+  margin: 0;
+  color: #666;
+  font-size: 12px;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+@media (max-width: 768px) {
+  .task-detail {
+    padding: 10px;
+  }
+  
+  .task-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .header-right {
+    text-align: left;
+  }
+  
+  .download-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .file-actions {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .action-buttons .el-button {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+</style>

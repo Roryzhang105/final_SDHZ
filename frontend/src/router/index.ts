@@ -68,6 +68,16 @@ const routes: Array<RouteRecordRaw> = [
               title: '任务列表',
               requiresAuth: true
             }
+          },
+          {
+            path: '/delivery/detail/:id',
+            name: 'TaskDetail',
+            component: () => import('@/views/delivery/TaskDetailView.vue'),
+            meta: {
+              title: '任务详情',
+              requiresAuth: true,
+              hideInMenu: true
+            }
           }
         ]
       },
