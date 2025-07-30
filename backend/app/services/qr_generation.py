@@ -68,17 +68,36 @@ class QRGenerationService:
             
             processing_time = time.time() - start_time
             
-            # 尝试更新数据库中的送达回证记录
+            # 尝试更新或创建数据库中的送达回证记录
             db_updated = False
             receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
             if receipt:
-                # 更新送达回证的二维码和条形码路径（注意：这里保存的是清理前的路径，实际文件已删除）
-                # 如果需要保留这些文件，可以注释掉上面的清理操作
+                # 更新现有记录的文件路径
                 updated_receipt = self.delivery_receipt_service.update_receipt_files(
                     receipt_id=receipt.id,
-                    receipt_file_path=str(final_label_path)  # 只保存最终的合成标签路径
+                    qr_code_path=qr_path_str,
+                    barcode_path=barcode_path_str,
+                    receipt_file_path=str(final_label_path)
                 )
                 db_updated = updated_receipt is not None
+            else:
+                # 创建新的送达回证记录
+                try:
+                    new_receipt = self.delivery_receipt_service.create_delivery_receipt(
+                        tracking_number=tracking_number,
+                        doc_title="送达回证"
+                    )
+                    # 更新文件路径
+                    updated_receipt = self.delivery_receipt_service.update_receipt_files(
+                        receipt_id=new_receipt.id,
+                        qr_code_path=qr_path_str,
+                        barcode_path=barcode_path_str,
+                        receipt_file_path=str(final_label_path)
+                    )
+                    db_updated = updated_receipt is not None
+                except Exception as e:
+                    # 如果创建失败，不影响文件生成结果
+                    print(f"创建送达回证记录失败: {e}")
             
             return {
                 "success": True,

@@ -34,6 +34,15 @@ if cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+else:
+    # 开发模式下允许所有来源（仅用于开发）
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)

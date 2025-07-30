@@ -14,6 +14,52 @@ from app.core.config import settings
 router = APIRouter()
 
 
+@router.post("/generate-from-tracking-number")
+async def generate_from_tracking_number(
+    tracking_number: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    直接基于快递单号生成二维码条形码标签
+    
+    Args:
+        tracking_number: 快递单号，如 1151238971060
+        db: 数据库会话
+    
+    Returns:
+        生成结果，包含标签文件路径等信息
+    """
+    if not tracking_number:
+        raise HTTPException(status_code=400, detail="快递单号不能为空")
+    
+    # 验证快递单号格式（只允许数字）
+    if not tracking_number.isdigit():
+        raise HTTPException(status_code=400, detail="快递单号格式无效，只能包含数字")
+    
+    # 构建标准URL
+    url = f"https://mini.ems.com.cn/youzheng/mini/{tracking_number}"
+    
+    try:
+        generation_service = QRGenerationService(db)
+        result = generation_service.generate_qr_barcode_label(url)
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"基于快递单号 {tracking_number} 生成标签成功",
+                "data": {
+                    **result["data"],
+                    "input_tracking_number": tracking_number,
+                    "generated_url": url
+                }
+            }
+        else:
+            raise HTTPException(status_code=400, detail=result["error"])
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成二维码条形码标签失败: {str(e)}")
+
+
 @router.post("/generate-from-url")
 async def generate_from_url(
     url: str = Form(...),
@@ -223,27 +269,34 @@ async def download_generated_file(file_name: str):
 
 @router.post("/test-generation")
 async def test_generation(
-    test_url: str = Form(default="https://mini.ems.com.cn/youzheng/mini/1151240728560"),
+    test_tracking_number: str = Form(default="1151238971060"),
     db: Session = Depends(get_db)
 ):
     """
     测试二维码条形码生成功能
     
     Args:
-        test_url: 测试URL，默认为示例URL
+        test_tracking_number: 测试快递单号，默认为用户提供的测试单号
         db: 数据库会话
     
     Returns:
         测试结果
     """
     try:
+        # 构建测试URL
+        test_url = f"https://mini.ems.com.cn/youzheng/mini/{test_tracking_number}"
+        
         generation_service = QRGenerationService(db)
         result = generation_service.generate_qr_barcode_label(test_url)
         
         return {
             "success": True,
-            "message": f"测试生成完成，使用URL: {test_url}",
-            "data": result
+            "message": f"测试生成完成，使用快递单号: {test_tracking_number}",
+            "data": {
+                **result,
+                "test_tracking_number": test_tracking_number,
+                "test_url": test_url
+            }
         }
         
     except Exception as e:
