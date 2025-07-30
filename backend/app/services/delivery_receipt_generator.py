@@ -22,9 +22,15 @@ class DeliveryReceiptGeneratorService:
         self.template_path = self.legacy_dir / "template.docx"
         self.script_path = self.legacy_dir / "insert_imgs_delivery_receipt.py"
         
-        # 输出目录
-        self.output_dir = Path(settings.UPLOAD_DIR) / "delivery_receipts"
-        self.output_dir.mkdir(exist_ok=True)
+        # 输出目录 - 确保使用绝对路径
+        project_root = Path(__file__).parent.parent.parent
+        if os.path.isabs(settings.UPLOAD_DIR):
+            upload_dir = Path(settings.UPLOAD_DIR)
+        else:
+            upload_dir = project_root / settings.UPLOAD_DIR
+        
+        self.output_dir = upload_dir / "delivery_receipts"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
     def _format_timestamp_to_chinese(self, timestamp: datetime) -> str:
         """
@@ -163,21 +169,47 @@ class DeliveryReceiptGeneratorService:
         qr_image_path = None
         screenshot_path = None
         
+        # 项目根目录路径
+        project_root = Path(__file__).parent.parent.parent
+        
+        def resolve_file_path(file_path: str) -> str:
+            """将相对路径转换为绝对路径"""
+            if not file_path:
+                return None
+            
+            # 如果已经是绝对路径，直接返回
+            if os.path.isabs(file_path):
+                return file_path if os.path.exists(file_path) else None
+            
+            # 尝试相对于项目根目录解析
+            abs_path = project_root / file_path
+            if abs_path.exists():
+                return str(abs_path)
+            
+            # 尝试相对于当前工作目录解析
+            abs_path = Path.cwd() / file_path
+            if abs_path.exists():
+                return str(abs_path)
+            
+            return None
+        
         # 1. 查找二维码文件 - 优先使用标签文件，其次使用单独的二维码文件
-        if receipt.receipt_file_path and os.path.exists(receipt.receipt_file_path):
-            qr_image_path = receipt.receipt_file_path
-        elif receipt.qr_code_path and os.path.exists(receipt.qr_code_path):
-            qr_image_path = receipt.qr_code_path
+        if receipt.receipt_file_path:
+            qr_image_path = resolve_file_path(receipt.receipt_file_path)
+        
+        if not qr_image_path and receipt.qr_code_path:
+            qr_image_path = resolve_file_path(receipt.qr_code_path)
         
         # 2. 查找截图文件 - 优先从TrackingInfo表查找，其次使用DeliveryReceipt表
         tracking_info = self.db.query(TrackingInfo).join(DeliveryReceipt).filter(
             DeliveryReceipt.tracking_number == tracking_number
         ).first()
         
-        if tracking_info and tracking_info.screenshot_path and os.path.exists(tracking_info.screenshot_path):
-            screenshot_path = tracking_info.screenshot_path
-        elif receipt.tracking_screenshot_path and os.path.exists(receipt.tracking_screenshot_path):
-            screenshot_path = receipt.tracking_screenshot_path
+        if tracking_info and tracking_info.screenshot_path:
+            screenshot_path = resolve_file_path(tracking_info.screenshot_path)
+        
+        if not screenshot_path and receipt.tracking_screenshot_path:
+            screenshot_path = resolve_file_path(receipt.tracking_screenshot_path)
         
         return qr_image_path, screenshot_path
     
