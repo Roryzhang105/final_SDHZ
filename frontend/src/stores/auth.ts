@@ -18,6 +18,8 @@ export const useAuthStore = defineStore('auth', () => {
     const storedToken = localStorage.getItem('token')
     const storedUser = localStorage.getItem('user')
     
+    console.log('Initializing auth:', { storedToken: !!storedToken, storedUser: !!storedUser })
+    
     if (storedToken) {
       token.value = storedToken
     }
@@ -25,6 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (storedUser) {
       try {
         user.value = JSON.parse(storedUser)
+        console.log('Restored user from localStorage:', user.value)
       } catch (error) {
         console.error('Failed to parse stored user data:', error)
         localStorage.removeItem('user')
