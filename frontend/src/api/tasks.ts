@@ -20,10 +20,10 @@ export const tasksApi = {
    */
   uploadImage(file: File): Promise<UploadImageResponse> {
     const formData = new FormData()
-    formData.append('image', file)
+    formData.append('file', file)
     
     return request({
-      url: '/api/v1/tasks/upload',
+      url: '/api/v1/upload/file',
       method: 'POST',
       data: formData,
       headers: {
@@ -39,12 +39,12 @@ export const tasksApi = {
    */
   uploadImages(files: File[]): Promise<UploadImageResponse[]> {
     const formData = new FormData()
-    files.forEach((file, index) => {
-      formData.append(`images[${index}]`, file)
+    files.forEach((file) => {
+      formData.append('files', file)
     })
     
     return request({
-      url: '/api/v1/tasks/upload/batch',
+      url: '/api/v1/upload/files',
       method: 'POST',
       data: formData,
       headers: {
