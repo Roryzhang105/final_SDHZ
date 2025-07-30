@@ -23,6 +23,10 @@ app.use(router)
 
 // 初始化认证状态
 const authStore = useAuthStore()
-authStore.initializeAuth()
+// 由于initializeAuth现在是异步的，我们不等待它完成
+// 而是让路由守卫在需要时处理初始化
+authStore.initializeAuth().catch(error => {
+  console.error('Auth initialization failed:', error)
+})
 
 app.mount('#app')

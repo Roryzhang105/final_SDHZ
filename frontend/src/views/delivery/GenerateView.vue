@@ -334,7 +334,7 @@ const clearAll = async () => {
 
 // 跳转到任务列表
 const goToTaskList = () => {
-  router.push('/delivery/list')
+  router.push('/app/delivery/list')
 }
 </script>
 

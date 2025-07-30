@@ -82,7 +82,7 @@
               type="primary"
               size="large"
               class="upload-button"
-              @click="$router.push('/delivery/generate')"
+              @click="$router.push('/app/delivery/generate')"
             >
               <el-icon><Camera /></el-icon>
               上传带二维码的图片

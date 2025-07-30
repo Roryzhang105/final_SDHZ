@@ -418,12 +418,12 @@ const handleReset = () => {
 
 // 处理上传新图片
 const handleUploadNew = () => {
-  router.push('/delivery/generate')
+  router.push('/app/delivery/generate')
 }
 
 // 处理查看详情
 const handleView = (row: any) => {
-  router.push(`/delivery/detail/${row.task_id}`)
+  router.push(`/app/delivery/detail/${row.task_id}`)
 }
 
 // 处理下载

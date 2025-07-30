@@ -644,7 +644,7 @@ const handleDownloadAll = async () => {
 
 // 返回列表
 const handleBack = () => {
-  router.push('/delivery/list')
+  router.push('/app/delivery/list')
 }
 
 // 组件挂载时获取数据
@@ -654,7 +654,7 @@ onMounted(() => {
     fetchTaskDetail(taskId)
   } else {
     ElMessage.error('任务ID不存在')
-    router.push('/delivery/list')
+    router.push('/app/delivery/list')
   }
 })
 </script>

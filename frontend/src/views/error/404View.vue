@@ -71,7 +71,7 @@ const router = useRouter()
 
 // 返回首页
 const goHome = () => {
-  router.push('/dashboard')
+  router.push('/app/dashboard')
 }
 
 // 返回上一页

@@ -151,17 +151,25 @@ const activeMenu = computed(() => route.path)
 // 菜单路由（从路由配置中过滤）
 const menuRoutes = computed(() => {
   const routes = router.getRoutes()
-  return routes.filter(route => {
+  // 找到主应用路由
+  const appRoute = routes.find(route => route.path === '/app')
+  if (!appRoute || !appRoute.children) return []
+  
+  return appRoute.children.filter(route => {
     // 过滤出需要在菜单中显示的路由
     return route.meta?.requiresAuth && 
            !route.meta?.hideInMenu && 
-           route.meta?.title &&
-           route.path !== '/'
+           route.meta?.title
   }).map(route => ({
     ...route,
+    // 将相对路径转换为绝对路径
+    path: `/app/${route.path}`,
     children: route.children?.filter(child => 
       !child.meta?.hideInMenu && child.meta?.title
-    )
+    ).map(child => ({
+      ...child,
+      path: `/app/${route.path}/${child.path}`
+    }))
   }))
 })
 
@@ -174,10 +182,10 @@ const breadcrumbList = computed(() => {
   }))
   
   // 如果不是仪表盘页面，添加仪表盘作为首页
-  if (route.path !== '/dashboard' && breadcrumbs[0]?.path !== '/dashboard') {
+  if (route.path !== '/app/dashboard' && breadcrumbs[0]?.path !== '/app/dashboard') {
     breadcrumbs.unshift({
       title: '仪表盘',
-      path: '/dashboard'
+      path: '/app/dashboard'
     })
   }
   

@@ -145,7 +145,7 @@ const refreshPage = () => {
 
 // 返回首页
 const goHome = () => {
-  router.push('/dashboard')
+  router.push('/app/dashboard')
 }
 
 // 报告错误

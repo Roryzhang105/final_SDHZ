@@ -13,14 +13,64 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const userInfo = computed(() => user.value)
 
+  // 检查token是否可能过期（简单的时间戳检查）
+  const isTokenExpired = (tokenString?: string): boolean => {
+    if (!tokenString) return true
+    
+    try {
+      // 解析JWT token的payload部分
+      const payload = JSON.parse(atob(tokenString.split('.')[1]))
+      const currentTime = Math.floor(Date.now() / 1000)
+      
+      // 如果token有exp字段，检查是否过期
+      if (payload.exp) {
+        return payload.exp < currentTime
+      }
+      
+      // 如果没有exp字段，假设token有效
+      return false
+    } catch (error) {
+      console.error('Failed to parse token:', error)
+      return true
+    }
+  }
+
+  // 验证token有效性
+  const validateToken = async (): Promise<boolean> => {
+    if (!token.value) return false
+    
+    // 首先检查token是否在客户端看起来已过期
+    if (isTokenExpired(token.value)) {
+      console.log('Token appears to be expired')
+      return false
+    }
+    
+    try {
+      // 尝试获取当前用户信息来验证token
+      await getCurrentUser()
+      return true
+    } catch (error) {
+      console.error('Token validation failed:', error)
+      return false
+    }
+  }
+
   // 初始化：从本地存储恢复状态
-  const initializeAuth = () => {
+  const initializeAuth = async () => {
     const storedToken = localStorage.getItem('token')
     const storedUser = localStorage.getItem('user')
     
     console.log('Initializing auth:', { storedToken: !!storedToken, storedUser: !!storedUser })
     
     if (storedToken) {
+      // 检查存储的token是否可能过期
+      if (isTokenExpired(storedToken)) {
+        console.log('Stored token is expired, clearing auth state')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        return
+      }
+      
       token.value = storedToken
     }
     
@@ -30,6 +80,18 @@ export const useAuthStore = defineStore('auth', () => {
         console.log('Restored user from localStorage:', user.value)
       } catch (error) {
         console.error('Failed to parse stored user data:', error)
+        localStorage.removeItem('user')
+      }
+    }
+    
+    // 如果有token但没有用户信息，尝试获取用户信息验证token
+    if (token.value && !user.value) {
+      console.log('Have token but no user, validating token...')
+      const isValid = await validateToken()
+      if (!isValid) {
+        console.log('Token validation failed, clearing auth state')
+        token.value = ''
+        localStorage.removeItem('token')
         localStorage.removeItem('user')
       }
     }
@@ -134,6 +196,8 @@ export const useAuthStore = defineStore('auth', () => {
     
     // 方法
     initializeAuth,
+    validateToken,
+    isTokenExpired,
     login,
     register,
     getCurrentUser,

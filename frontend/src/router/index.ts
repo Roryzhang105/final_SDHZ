@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 
 // 路由配置
 const routes: Array<RouteRecordRaw> = [
+  // 认证相关路由（不使用 MainLayout）
   {
     path: '/login',
     name: 'Login',
@@ -24,16 +25,17 @@ const routes: Array<RouteRecordRaw> = [
       hideInMenu: true
     }
   },
+  
+  // 主应用路由（使用 MainLayout）
   {
-    path: '/',
-    redirect: '/login',
+    path: '/app',
     component: () => import('@/components/Layout/MainLayout.vue'),
     meta: {
       requiresAuth: true
     },
     children: [
       {
-        path: '/dashboard',
+        path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/DashboardView.vue'),
         meta: {
@@ -43,7 +45,7 @@ const routes: Array<RouteRecordRaw> = [
         }
       },
       {
-        path: '/delivery',
+        path: 'delivery',
         name: 'Delivery',
         meta: {
           title: '送达回证',
@@ -52,7 +54,7 @@ const routes: Array<RouteRecordRaw> = [
         },
         children: [
           {
-            path: '/delivery/generate',
+            path: 'generate',
             name: 'DeliveryGenerate',
             component: () => import('@/views/delivery/GenerateView.vue'),
             meta: {
@@ -61,7 +63,7 @@ const routes: Array<RouteRecordRaw> = [
             }
           },
           {
-            path: '/delivery/list',
+            path: 'list',
             name: 'DeliveryList',
             component: () => import('@/views/delivery/ListView.vue'),
             meta: {
@@ -70,7 +72,7 @@ const routes: Array<RouteRecordRaw> = [
             }
           },
           {
-            path: '/delivery/detail/:id',
+            path: 'detail/:id',
             name: 'TaskDetail',
             component: () => import('@/views/delivery/TaskDetailView.vue'),
             meta: {
@@ -80,9 +82,11 @@ const routes: Array<RouteRecordRaw> = [
             }
           }
         ]
-      },
+      }
     ]
   },
+  
+  // 错误页面
   {
     path: '/404',
     name: 'NotFound',
@@ -98,6 +102,17 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/error/500View.vue'),
     meta: {
       title: '服务器错误',
+      hideInMenu: true
+    }
+  },
+  
+  // 根路径（不设置重定向，在路由守卫中处理）
+  {
+    path: '/',
+    name: 'Root',
+    component: () => import('@/views/LoadingView.vue'), // 需要创建一个loading页面
+    meta: {
+      title: '加载中...',
       hideInMenu: true
     }
   },
@@ -119,25 +134,83 @@ const router = createRouter({
   }
 })
 
+// 重定向计数器，防止无限重定向
+let redirectCount = 0
+const MAX_REDIRECTS = 3
+
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   
-  console.log('Route guard:', { 
-    to: to.path, 
-    requiresAuth: to.meta.requiresAuth, 
+  // 获取localStorage中的token进行详细日志记录
+  const storedToken = localStorage.getItem('token')
+  const storedUser = localStorage.getItem('user')
+  
+  console.log('=== Route Guard Start ===', {
+    to: to.path,
+    from: from.path,
+    requiresAuth: to.meta.requiresAuth,
+    storeToken: !!authStore.token,
+    storeUser: !!authStore.user,
+    storedToken: !!storedToken,
+    storedUser: !!storedUser,
     isAuthenticated: authStore.isAuthenticated,
-    hasUser: !!authStore.user 
+    redirectCount
   })
+  
+  // 检查重定向次数，防止无限循环
+  if (redirectCount >= MAX_REDIRECTS) {
+    console.error('Too many redirects, resetting and going to 404')
+    redirectCount = 0
+    next('/404')
+    return
+  }
   
   // 设置页面标题
   if (to.meta.title) {
     document.title = `${to.meta.title} - ${import.meta.env.VITE_APP_TITLE || '送达回证系统'}`
   }
   
+  // 确保认证状态已初始化
+  if (storedToken && !authStore.token) {
+    console.log('Found stored token but auth not initialized, initializing...')
+    try {
+      await authStore.initializeAuth()
+      console.log('Auth initialization completed in route guard')
+    } catch (error) {
+      console.error('Auth initialization failed in route guard:', error)
+      // 如果初始化失败，清理可能损坏的状态
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    }
+  }
+  
+  // 处理根路径的智能重定向
+  if (to.path === '/') {
+    redirectCount++
+    if (authStore.isAuthenticated) {
+      console.log('Root path - authenticated, redirecting to dashboard')
+      next('/app/dashboard')
+      return
+    } else {
+      console.log('Root path - not authenticated, redirecting to login')
+      next('/login')
+      return
+    }
+  }
+  
+  // 如果已登录用户访问登录页，重定向到仪表盘
+  if (to.path === '/login' && authStore.isAuthenticated) {
+    redirectCount++
+    console.log('Already authenticated, redirecting to dashboard')
+    next('/app/dashboard')
+    return
+  }
+  
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
     if (!authStore.isAuthenticated) {
+      redirectCount++
       console.log('Not authenticated, redirecting to login')
       ElMessage.warning('请先登录')
       next({
@@ -155,20 +228,16 @@ router.beforeEach(async (to, from, next) => {
         console.log('Got current user successfully')
       } catch (error) {
         console.error('获取用户信息失败:', error)
-        authStore.logout()
+        redirectCount++
+        await authStore.logout()
         next('/login')
         return
       }
     }
   }
   
-  // 如果已登录用户访问登录页，重定向到仪表盘
-  if (to.path === '/login' && authStore.isAuthenticated) {
-    console.log('Already authenticated, redirecting to dashboard')
-    next('/dashboard')
-    return
-  }
-  
+  // 成功通过守卫，重置重定向计数器
+  redirectCount = 0
   console.log('Route guard passed, proceeding...')
   next()
 })
