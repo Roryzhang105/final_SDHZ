@@ -116,8 +116,13 @@ const goToRegister = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  margin: 0;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .login-card {

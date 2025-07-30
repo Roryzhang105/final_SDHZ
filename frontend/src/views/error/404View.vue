@@ -42,21 +42,13 @@
           <el-icon><Dashboard /></el-icon>
           <span>仪表盘</span>
         </router-link>
-        <router-link to="/delivery/list" class="quick-link">
+        <router-link to="/delivery/generate" class="quick-link">
           <el-icon><Document /></el-icon>
-          <span>送达回证</span>
+          <span>上传图片</span>
         </router-link>
-        <router-link to="/tracking" class="quick-link">
-          <el-icon><Van /></el-icon>
-          <span>物流跟踪</span>
-        </router-link>
-        <router-link to="/qr/generate" class="quick-link">
+        <router-link to="/delivery/list" class="quick-link">
           <el-icon><Grid /></el-icon>
-          <span>二维码生成</span>
-        </router-link>
-        <router-link to="/files" class="quick-link">
-          <el-icon><Folder /></el-icon>
-          <span>文件管理</span>
+          <span>任务列表</span>
         </router-link>
       </div>
     </div>
@@ -72,9 +64,7 @@ import {
   Refresh,
   Dashboard,
   Document,
-  Van,
-  Grid,
-  Folder
+  Grid
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -97,13 +87,17 @@ const refreshPage = () => {
 
 <style scoped>
 .error-container {
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  margin: 0;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .error-content {

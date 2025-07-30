@@ -190,14 +190,18 @@ onMounted(() => {
 
 <style scoped>
 .error-container {
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+  margin: 0;
   padding: 20px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .error-content {

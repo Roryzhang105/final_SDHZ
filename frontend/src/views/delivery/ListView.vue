@@ -1,5 +1,5 @@
 <template>
-  <div class="task-list">
+  <div class="page-content-full task-list">
     <el-card class="filter-card" shadow="hover">
       <template #header>
         <div class="card-header">
@@ -499,7 +499,7 @@ onUnmounted(() => {
 
 <style scoped>
 .task-list {
-  padding: 0;
+  /* padding已通过page-content-full类提供 */
 }
 
 .filter-card {

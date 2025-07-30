@@ -1,5 +1,5 @@
 <template>
-  <div class="task-detail">
+  <div class="page-content task-detail">
     <!-- 顶部基本信息 -->
     <el-card class="info-card" shadow="hover">
       <div class="task-header">
@@ -661,7 +661,7 @@ onMounted(() => {
 
 <style scoped>
 .task-detail {
-  padding: 20px;
+  /* padding已通过page-content类提供 */
 }
 
 .info-card {
@@ -844,9 +844,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .task-detail {
-    padding: 10px;
-  }
   
   .task-header {
     flex-direction: column;

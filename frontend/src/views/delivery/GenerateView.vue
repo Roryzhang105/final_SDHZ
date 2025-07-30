@@ -1,5 +1,5 @@
 <template>
-  <div class="upload-page">
+  <div class="page-content upload-page">
     <el-card>
       <template #header>
         <div class="card-header">
@@ -340,7 +340,7 @@ const goToTaskList = () => {
 
 <style scoped>
 .upload-page {
-  padding: 20px;
+  /* padding已通过page-content类提供 */
 }
 
 .card-header {
@@ -478,9 +478,6 @@ const goToTaskList = () => {
 }
 
 @media (max-width: 768px) {
-  .upload-page {
-    padding: 10px;
-  }
   
   .upload-area :deep(.el-upload) {
     height: 150px;

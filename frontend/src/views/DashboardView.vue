@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="page-content dashboard">
     <el-row :gutter="20">
       <!-- 统计卡片 -->
       <el-col :xs="24" :sm="12" :md="6">
@@ -202,7 +202,7 @@ onMounted(() => {
 
 <style scoped>
 .dashboard {
-  padding: 20px;
+  /* padding已通过page-content类提供 */
 }
 
 .stat-card {
@@ -268,10 +268,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .dashboard {
-    padding: 10px;
-  }
-  
   .upload-button {
     font-size: 16px;
     height: 70px;

@@ -335,14 +335,16 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
+  width: 0; /* 确保flex能正确工作 */
 }
 
 .main-content {
   background-color: #f0f2f5;
   overflow-y: auto;
-  padding: 20px;
+  padding: 0;
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 /* 页面切换动画 */
