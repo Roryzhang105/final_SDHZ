@@ -68,48 +68,29 @@
     </el-row>
     
     <el-row :gutter="20" style="margin-top: 20px;">
-      <!-- 快速操作 -->
+      <!-- 上传图片 -->
       <el-col :xs="24" :md="12">
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>快速操作</span>
+              <span>快速上传</span>
             </div>
           </template>
           
-          <div class="quick-actions">
+          <div class="upload-section">
             <el-button
               type="primary"
               size="large"
+              class="upload-button"
               @click="$router.push('/delivery/generate')"
             >
-              <el-icon><Plus /></el-icon>
-              生成送达回证
-            </el-button>
-            
-            <el-button
-              size="large"
-              @click="$router.push('/tracking')"
-            >
-              <el-icon><Search /></el-icon>
-              查询物流信息
-            </el-button>
-            
-            <el-button
-              size="large"
-              @click="$router.push('/qr/generate')"
-            >
-              <el-icon><Grid /></el-icon>
-              生成二维码
-            </el-button>
-            
-            <el-button
-              size="large"
-              @click="$router.push('/qr/recognize')"
-            >
               <el-icon><Camera /></el-icon>
-              识别二维码
+              上传带二维码的图片
             </el-button>
+            
+            <p class="upload-description">
+              请上传包含二维码的图片，系统将自动识别并创建任务
+            </p>
           </div>
         </el-card>
       </el-col>
@@ -150,9 +131,6 @@ import {
   Check, 
   Clock, 
   Warning, 
-  Plus, 
-  Search, 
-  Grid, 
   Camera,
   Refresh
 } from '@element-plus/icons-vue'
@@ -170,21 +148,27 @@ const failedReceipts = ref(0)
 const recentActivities = ref([
   {
     id: 1,
-    description: '生成送达回证 #1151242358360',
+    description: '任务 #1151242358360 处理完成，送达回证已生成',
     time: '2024-01-30 14:30:00',
     type: 'success'
   },
   {
     id: 2,
-    description: '更新物流信息 #1151240728560',
+    description: '任务 #1151240728560 开始处理，正在识别二维码',
     time: '2024-01-30 13:45:00',
     type: 'primary'
   },
   {
     id: 3,
-    description: '生成二维码标签',
+    description: '新任务 #1151238971060 已创建，等待处理',
     time: '2024-01-30 12:20:00',
     type: 'info'
+  },
+  {
+    id: 4,
+    description: '任务 #1151235647120 处理失败，二维码识别异常',
+    time: '2024-01-30 11:15:00',
+    type: 'warning'
   }
 ])
 
@@ -258,19 +242,29 @@ onMounted(() => {
   align-items: center;
 }
 
-.quick-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 15px;
+.upload-section {
+  text-align: center;
+  padding: 20px 0;
 }
 
-.quick-actions .el-button {
-  height: 60px;
+.upload-button {
+  height: 80px;
+  font-size: 18px;
+  padding: 0 40px;
+  border-radius: 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 10px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.upload-description {
+  color: #666;
+  font-size: 14px;
+  margin-top: 15px;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {
@@ -278,8 +272,10 @@ onMounted(() => {
     padding: 10px;
   }
   
-  .quick-actions {
-    grid-template-columns: 1fr;
+  .upload-button {
+    font-size: 16px;
+    height: 70px;
+    max-width: 100%;
   }
 }
 </style>
