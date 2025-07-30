@@ -88,6 +88,48 @@ class FileManagementService:
         except Exception as e:
             return []
     
+    def list_delivery_receipt_docs(self, limit: int = 50) -> List[Dict]:
+        """
+        列出所有送达回证Word文档
+        
+        Args:
+            limit: 返回记录数限制
+            
+        Returns:
+            送达回证文档记录列表
+        """
+        try:
+            receipt_records = self.db.query(DeliveryReceipt).filter(
+                DeliveryReceipt.delivery_receipt_doc_path.isnot(None)
+            ).order_by(DeliveryReceipt.created_at.desc()).limit(limit).all()
+            
+            results = []
+            for record in receipt_records:
+                doc_file_info = self.get_file_info(record.delivery_receipt_doc_path) if record.delivery_receipt_doc_path else {"exists": False}
+                
+                results.append({
+                    "id": record.id,
+                    "tracking_number": record.tracking_number,
+                    "doc_title": record.doc_title,
+                    "sender": record.sender,
+                    "send_time": record.send_time,
+                    "send_location": record.send_location,
+                    "receiver": record.receiver,
+                    "status": record.status.value if record.status else None,
+                    "created_at": record.created_at.isoformat() if record.created_at else None,
+                    "document_info": {
+                        "doc_path": record.delivery_receipt_doc_path,
+                        "doc_exists": doc_file_info["exists"],
+                        "file_size": doc_file_info.get("file_size", 0),
+                        "modified_time": doc_file_info.get("modified_time", None)
+                    }
+                })
+            
+            return results
+            
+        except Exception as e:
+            return []
+    
     def list_qr_labels(self, limit: int = 50) -> List[Dict]:
         """
         列出所有二维码标签文件
@@ -174,6 +216,8 @@ class FileManagementService:
                     db_receipt_paths.add(record.receipt_file_path)
                 if record.tracking_screenshot_path:
                     db_receipt_paths.add(record.tracking_screenshot_path)
+                if record.delivery_receipt_doc_path:
+                    db_receipt_paths.add(record.delivery_receipt_doc_path)
             
             all_db_paths = db_screenshot_paths | db_receipt_paths
             
@@ -181,7 +225,7 @@ class FileManagementService:
             orphaned_files = []
             total_size = 0
             
-            for file_type_dir in ["tracking_screenshots", "tracking_html"]:
+            for file_type_dir in ["tracking_screenshots", "tracking_html", "delivery_receipts"]:
                 dir_path = self.upload_dir / file_type_dir
                 if dir_path.exists():
                     for file_path in dir_path.rglob("*"):
@@ -192,7 +236,8 @@ class FileManagementService:
                                 orphaned_files.append({
                                     "file_path": abs_path,
                                     "file_size": file_size,
-                                    "modified_time": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                                    "modified_time": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+                                    "file_type": file_type_dir
                                 })
                                 total_size += file_size
             
@@ -310,7 +355,7 @@ class FileManagementService:
             }
             
             # 统计各个目录
-            for subdir in ["tracking_screenshots", "tracking_html"]:
+            for subdir in ["tracking_screenshots", "tracking_html", "delivery_receipts"]:
                 dir_path = self.upload_dir / subdir
                 if dir_path.exists():
                     file_count = 0
@@ -348,9 +393,14 @@ class FileManagementService:
                 DeliveryReceipt.receipt_file_path.isnot(None)
             ).count()
             
+            delivery_receipt_doc_count = self.db.query(DeliveryReceipt).filter(
+                DeliveryReceipt.delivery_receipt_doc_path.isnot(None)
+            ).count()
+            
             stats["database"] = {
                 "screenshot_records": screenshot_count,
-                "receipt_file_records": receipt_file_count
+                "receipt_file_records": receipt_file_count,
+                "delivery_receipt_doc_records": delivery_receipt_doc_count
             }
             
             return {

@@ -74,6 +74,39 @@ async def list_qr_labels(
         raise HTTPException(status_code=500, detail=f"获取二维码标签列表失败: {str(e)}")
 
 
+@router.get("/delivery-receipt-docs")
+async def list_delivery_receipt_docs(
+    limit: int = Query(50, description="返回记录数限制", ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    获取所有送达回证Word文档列表
+    
+    Args:
+        limit: 返回记录数限制
+        db: 数据库会话
+    
+    Returns:
+        送达回证文档列表
+    """
+    try:
+        file_service = FileManagementService(db)
+        docs = file_service.list_delivery_receipt_docs(limit)
+        
+        return {
+            "success": True,
+            "message": f"获取送达回证文档列表成功，共 {len(docs)} 条记录",
+            "data": {
+                "delivery_receipt_docs": docs,
+                "count": len(docs),
+                "limit": limit
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取送达回证文档列表失败: {str(e)}")
+
+
 @router.get("/stats")
 async def get_storage_stats(db: Session = Depends(get_db)):
     """

@@ -1,0 +1,358 @@
+import os
+import subprocess
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.models.delivery_receipt import DeliveryReceipt
+from app.models.tracking import TrackingInfo
+from app.services.delivery_receipt import DeliveryReceiptService
+
+
+class DeliveryReceiptGeneratorService:
+    """送达回证生成服务"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.delivery_receipt_service = DeliveryReceiptService(db)
+        self.legacy_dir = Path(__file__).parent.parent / "utils" / "legacy"
+        self.template_path = self.legacy_dir / "template.docx"
+        self.script_path = self.legacy_dir / "insert_imgs_delivery_receipt.py"
+        
+        # 输出目录
+        self.output_dir = Path(settings.UPLOAD_DIR) / "delivery_receipts"
+        self.output_dir.mkdir(exist_ok=True)
+        
+    def generate_delivery_receipt(
+        self,
+        tracking_number: str,
+        doc_title: str = "送达回证",
+        sender: Optional[str] = None,
+        send_time: Optional[str] = None,
+        send_location: Optional[str] = None,
+        receiver: Optional[str] = None
+    ) -> Dict:
+        """
+        生成送达回证Word文档
+        
+        Args:
+            tracking_number: 快递单号
+            doc_title: 送达文书名称及文号
+            sender: 送达人
+            send_time: 送达时间
+            send_location: 送达地点
+            receiver: 受送达人
+            
+        Returns:
+            生成结果
+        """
+        try:
+            # 1. 查找或创建送达回证记录
+            receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
+            if not receipt:
+                # 创建基础记录
+                receipt = DeliveryReceipt(
+                    tracking_number=tracking_number,
+                    doc_title=doc_title,
+                    sender=sender,
+                    send_time=send_time,
+                    send_location=send_location,
+                    receiver=receiver
+                )
+                self.db.add(receipt)
+                self.db.commit()
+                self.db.refresh(receipt)
+            else:
+                # 更新现有记录
+                receipt.doc_title = doc_title
+                receipt.sender = sender
+                receipt.send_time = send_time
+                receipt.send_location = send_location
+                receipt.receiver = receiver
+                self.db.commit()
+            
+            # 2. 获取二维码和截图文件路径
+            qr_image_path, screenshot_path = self._get_required_files(tracking_number, receipt)
+            
+            if not qr_image_path:
+                return {
+                    "success": False,
+                    "error": f"未找到快递单号 {tracking_number} 对应的二维码文件，请先生成二维码",
+                    "tracking_number": tracking_number
+                }
+            
+            if not screenshot_path:
+                return {
+                    "success": False,
+                    "error": f"未找到快递单号 {tracking_number} 对应的物流截图，请先生成截图",
+                    "tracking_number": tracking_number
+                }
+            
+            # 3. 生成Word文档
+            doc_result = self._generate_word_document(
+                tracking_number=tracking_number,
+                doc_title=doc_title,
+                qr_image_path=qr_image_path,
+                screenshot_path=screenshot_path,
+                sender=sender,
+                send_time=send_time,
+                send_location=send_location,
+                receiver=receiver
+            )
+            
+            if not doc_result["success"]:
+                return doc_result
+            
+            # 4. 更新数据库记录
+            receipt.delivery_receipt_doc_path = doc_result["doc_path"]
+            self.db.commit()
+            
+            return {
+                "success": True,
+                "message": "送达回证生成成功",
+                "tracking_number": tracking_number,
+                "receipt_id": receipt.id,
+                "doc_path": doc_result["doc_path"],
+                "doc_filename": doc_result["doc_filename"],
+                "file_size": doc_result["file_size"],
+                "qr_image_used": qr_image_path,
+                "screenshot_used": screenshot_path
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            return {
+                "success": False,
+                "error": f"生成送达回证过程中发生错误: {str(e)}",
+                "tracking_number": tracking_number
+            }
+    
+    def _get_required_files(self, tracking_number: str, receipt: DeliveryReceipt) -> tuple:
+        """
+        获取生成送达回证所需的文件路径
+        
+        Returns:
+            (qr_image_path, screenshot_path) 元组
+        """
+        qr_image_path = None
+        screenshot_path = None
+        
+        # 1. 查找二维码文件 - 优先使用标签文件，其次使用单独的二维码文件
+        if receipt.receipt_file_path and os.path.exists(receipt.receipt_file_path):
+            qr_image_path = receipt.receipt_file_path
+        elif receipt.qr_code_path and os.path.exists(receipt.qr_code_path):
+            qr_image_path = receipt.qr_code_path
+        
+        # 2. 查找截图文件 - 优先从TrackingInfo表查找，其次使用DeliveryReceipt表
+        tracking_info = self.db.query(TrackingInfo).join(DeliveryReceipt).filter(
+            DeliveryReceipt.tracking_number == tracking_number
+        ).first()
+        
+        if tracking_info and tracking_info.screenshot_path and os.path.exists(tracking_info.screenshot_path):
+            screenshot_path = tracking_info.screenshot_path
+        elif receipt.tracking_screenshot_path and os.path.exists(receipt.tracking_screenshot_path):
+            screenshot_path = receipt.tracking_screenshot_path
+        
+        return qr_image_path, screenshot_path
+    
+    def _generate_word_document(
+        self,
+        tracking_number: str,
+        doc_title: str,
+        qr_image_path: str,
+        screenshot_path: str,
+        sender: Optional[str] = None,
+        send_time: Optional[str] = None,
+        send_location: Optional[str] = None,
+        receiver: Optional[str] = None
+    ) -> Dict:
+        """
+        调用insert_imgs_delivery_receipt.py生成Word文档
+        """
+        try:
+            # 生成输出文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            doc_filename = f"delivery_receipt_{tracking_number}_{timestamp}.docx"
+            output_path = self.output_dir / doc_filename
+            
+            # 构建命令参数
+            cmd = [
+                "python3", str(self.script_path),
+                "--template", str(self.template_path),
+                "--output", str(output_path),
+                "--doc-title", doc_title,
+                "--note-img", qr_image_path,
+                "--footer-img", screenshot_path
+            ]
+            
+            # 添加可选参数
+            if sender:
+                cmd.extend(["--sender", sender])
+            if send_time:
+                cmd.extend(["--send-time", send_time])
+            if send_location:
+                cmd.extend(["--send-location", send_location])
+            if receiver:
+                cmd.extend(["--receiver", receiver])
+            
+            # 执行命令
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.legacy_dir)
+            )
+            
+            if result.returncode != 0:
+                return {
+                    "success": False,
+                    "error": f"Word文档生成失败: {result.stderr}",
+                    "stdout": result.stdout
+                }
+            
+            # 检查文件是否生成成功
+            if not output_path.exists():
+                return {
+                    "success": False,
+                    "error": "Word文档生成失败，输出文件不存在"
+                }
+            
+            file_size = output_path.stat().st_size
+            
+            return {
+                "success": True,
+                "doc_path": str(output_path),
+                "doc_filename": doc_filename,
+                "file_size": file_size
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "error": "Word文档生成超时"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"调用Word生成脚本失败: {str(e)}"
+            }
+    
+    def get_receipt_info(self, tracking_number: str) -> Dict:
+        """
+        获取送达回证信息
+        
+        Args:
+            tracking_number: 快递单号
+            
+        Returns:
+            送达回证信息
+        """
+        try:
+            receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
+            
+            if not receipt:
+                return {
+                    "success": False,
+                    "message": f"未找到快递单号 {tracking_number} 的送达回证记录",
+                    "tracking_number": tracking_number
+                }
+            
+            # 检查Word文档是否存在
+            doc_exists = False
+            file_size = 0
+            if receipt.delivery_receipt_doc_path:
+                doc_exists = os.path.exists(receipt.delivery_receipt_doc_path)
+                if doc_exists:
+                    file_size = os.path.getsize(receipt.delivery_receipt_doc_path)
+            
+            return {
+                "success": True,
+                "message": "获取送达回证信息成功",
+                "tracking_number": tracking_number,
+                "receipt_info": {
+                    "id": receipt.id,
+                    "doc_title": receipt.doc_title,
+                    "sender": receipt.sender,
+                    "send_time": receipt.send_time,
+                    "send_location": receipt.send_location,
+                    "receiver": receipt.receiver,
+                    "status": receipt.status.value if receipt.status else None,
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+                    "updated_at": receipt.updated_at.isoformat() if receipt.updated_at else None
+                },
+                "document_info": {
+                    "doc_path": receipt.delivery_receipt_doc_path,
+                    "doc_exists": doc_exists,
+                    "file_size": file_size
+                },
+                "files_info": {
+                    "qr_code_path": receipt.qr_code_path,
+                    "barcode_path": receipt.barcode_path,
+                    "receipt_file_path": receipt.receipt_file_path,
+                    "tracking_screenshot_path": receipt.tracking_screenshot_path
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"获取送达回证信息失败: {str(e)}",
+                "tracking_number": tracking_number
+            }
+    
+    def list_delivery_receipts(self, limit: int = 50) -> Dict:
+        """
+        列出所有送达回证
+        
+        Args:
+            limit: 返回记录数限制
+            
+        Returns:
+            送达回证列表
+        """
+        try:
+            receipts = self.db.query(DeliveryReceipt).order_by(
+                DeliveryReceipt.created_at.desc()
+            ).limit(limit).all()
+            
+            results = []
+            for receipt in receipts:
+                # 检查Word文档是否存在
+                doc_exists = False
+                file_size = 0
+                if receipt.delivery_receipt_doc_path:
+                    doc_exists = os.path.exists(receipt.delivery_receipt_doc_path)
+                    if doc_exists:
+                        file_size = os.path.getsize(receipt.delivery_receipt_doc_path)
+                
+                results.append({
+                    "id": receipt.id,
+                    "tracking_number": receipt.tracking_number,
+                    "doc_title": receipt.doc_title,
+                    "sender": receipt.sender,
+                    "send_time": receipt.send_time,
+                    "send_location": receipt.send_location,
+                    "receiver": receipt.receiver,
+                    "status": receipt.status.value if receipt.status else None,
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+                    "doc_exists": doc_exists,
+                    "file_size": file_size
+                })
+            
+            return {
+                "success": True,
+                "message": f"获取送达回证列表成功，共 {len(results)} 条记录",
+                "receipts": results,
+                "count": len(results),
+                "limit": limit
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"获取送达回证列表失败: {str(e)}"
+            }
