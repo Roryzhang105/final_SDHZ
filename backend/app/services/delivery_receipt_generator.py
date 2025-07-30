@@ -1,6 +1,7 @@
 import os
 import subprocess
 import tempfile
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -34,7 +35,7 @@ class DeliveryReceiptGeneratorService:
         
     def _format_timestamp_to_chinese(self, timestamp: datetime) -> str:
         """
-        将时间戳转换为中文格式: "xxxx年xx月xx日xx时"
+        将时间戳转换为中文格式: "xxxx年xx月xx日"
         
         Args:
             timestamp: 时间戳对象
@@ -42,7 +43,57 @@ class DeliveryReceiptGeneratorService:
         Returns:
             格式化的中文时间字符串
         """
-        return f"{timestamp.year}年{timestamp.month:02d}月{timestamp.day:02d}日{timestamp.hour:02d}时"
+        return f"{timestamp.year}年{timestamp.month:02d}月{timestamp.day:02d}日"
+    
+    def _extract_pickup_time(self, tracking_data) -> Optional[datetime]:
+        """
+        从物流轨迹数据中提取揽收时间（快递寄出时间）
+        
+        Args:
+            tracking_data: 物流轨迹数据，可以是JSON字符串或dict对象
+            
+        Returns:
+            揽收时间的datetime对象，如果未找到则返回None
+        """
+        if not tracking_data:
+            return None
+        
+        try:
+            # 如果是字符串，则解析为dict
+            if isinstance(tracking_data, str):
+                data = json.loads(tracking_data)
+            else:
+                data = tracking_data
+                
+            traces = data.get('traces', [])
+            
+            # 查找状态为"揽收"的记录
+            for trace in traces:
+                status = trace.get('status', '').strip()
+                if status == '揽收':
+                    time_str = trace.get('time', '').strip()
+                    if time_str:
+                        try:
+                            # 解析时间字符串，格式如: "2025-07-07 18:18:37"
+                            return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            continue
+            
+            # 如果没找到"揽收"状态，尝试查找最早的物流记录
+            if traces:
+                last_trace = traces[-1]  # 物流记录通常按时间倒序排列，最后一个是最早的
+                time_str = last_trace.get('time', '').strip()
+                if time_str:
+                    try:
+                        return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        pass
+                        
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"解析物流数据失败: {e}")
+            return None
+        
+        return None
     
     def generate_delivery_receipt(
         self,
@@ -98,10 +149,13 @@ class DeliveryReceiptGeneratorService:
                     DeliveryReceipt.tracking_number == tracking_number
                 ).first()
                 
-                if tracking_info and tracking_info.last_update:
-                    send_time = self._format_timestamp_to_chinese(tracking_info.last_update)
-                    receipt.send_time = send_time
-                    self.db.commit()
+                if tracking_info and tracking_info.tracking_data:
+                    # 从物流数据中提取揽收时间（寄出时间）
+                    pickup_time = self._extract_pickup_time(tracking_info.tracking_data)
+                    if pickup_time:
+                        send_time = self._format_timestamp_to_chinese(pickup_time)
+                        receipt.send_time = send_time
+                        self.db.commit()
             
             # 3. 获取二维码和截图文件路径
             qr_image_path, screenshot_path = self._get_required_files(tracking_number, receipt)
