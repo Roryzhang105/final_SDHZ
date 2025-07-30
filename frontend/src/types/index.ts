@@ -76,3 +76,185 @@ export interface SearchParams {
   date_from?: string
   date_to?: string
 }
+
+// 任务状态枚举
+export enum TaskStatus {
+  PENDING = 'pending',          // 待处理
+  RECOGNIZING = 'recognizing',  // 识别中
+  TRACKING = 'tracking',        // 查询物流中  
+  DELIVERED = 'delivered',      // 已签收
+  GENERATING = 'generating',    // 生成文档中
+  COMPLETED = 'completed',      // 已完成
+  FAILED = 'failed'            // 失败
+}
+
+// 任务进度接口
+export interface TaskProgress {
+  stage: string
+  percentage: number
+  description: string
+  timestamp: string
+}
+
+// 任务接口
+export interface Task {
+  id: number
+  task_id: string
+  tracking_number?: string
+  status: TaskStatus
+  created_at: string
+  updated_at: string
+  completed_at?: string
+  
+  // 图片相关
+  image_url?: string
+  image_filename?: string
+  image_size?: number
+  
+  // 识别结果
+  qr_result?: string
+  qr_confidence?: number
+  
+  // 物流信息
+  tracking_info?: {
+    status: string
+    location: string
+    update_time: string
+    timeline?: Array<{
+      time: string
+      location: string
+      description: string
+    }>
+  }
+  
+  // 回证信息
+  doc_title?: string
+  sender?: string
+  send_location?: string
+  receiver?: string
+  send_time?: string
+  remarks?: string
+  
+  // 文件路径
+  document_url?: string
+  screenshot_url?: string
+  
+  // 错误信息
+  error_message?: string
+  error_code?: string
+  
+  // 进度信息
+  progress?: TaskProgress[]
+  current_stage?: string
+  progress_percentage?: number
+}
+
+// 任务列表查询参数
+export interface TaskListParams {
+  page: number
+  size: number
+  task_id?: string
+  tracking_number?: string
+  status?: string
+  sort_by?: 'created_asc' | 'created_desc' | 'updated_asc' | 'updated_desc'
+  date_from?: string
+  date_to?: string
+}
+
+// 任务列表响应
+export interface TaskListResponse {
+  success: boolean
+  message?: string
+  data: {
+    items: Task[]
+    total: number
+    page: number
+    size: number
+    pages: number
+  }
+}
+
+// 任务详情响应
+export interface TaskDetailResponse {
+  success: boolean
+  message?: string
+  data: Task
+}
+
+// 任务更新数据
+export interface TaskUpdateData {
+  doc_title?: string
+  sender?: string
+  send_location?: string
+  receiver?: string
+  send_time?: string
+  remarks?: string
+}
+
+// 上传图片响应
+export interface UploadImageResponse {
+  success: boolean
+  message?: string
+  data?: {
+    task_id: string
+    image_url: string
+    filename: string
+    size: number
+  }
+}
+
+// 生成回证响应
+export interface GenerateReceiptResponse {
+  success: boolean
+  message?: string
+  data?: {
+    task_id: string
+    document_url: string
+    filename: string
+    size: number
+  }
+}
+
+// 任务统计
+export interface TaskStats {
+  total: number
+  completed: number
+  pending: number
+  failed: number
+  processing: number
+}
+
+// 活动记录
+export interface Activity {
+  id: string
+  task_id: string
+  description: string
+  time: string
+  type: 'success' | 'info' | 'warning' | 'error'
+  details?: any
+}
+
+// 文件下载参数
+export interface DownloadParams {
+  task_id: string
+  file_type: 'document' | 'screenshot' | 'image' | 'all'
+}
+
+// 批量操作参数
+export interface BatchOperationParams {
+  task_ids: string[]
+  operation: 'delete' | 'retry' | 'download'
+}
+
+// 任务筛选器
+export interface TaskFilter {
+  status: TaskStatus[]
+  date_range: [string, string] | null
+  keyword: string
+}
+
+// 任务排序
+export interface TaskSort {
+  field: 'created_at' | 'updated_at' | 'status'
+  order: 'asc' | 'desc'
+}
