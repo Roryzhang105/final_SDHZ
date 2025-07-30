@@ -158,8 +158,8 @@ class FileManagementService:
                 
                 results.append({
                     "tracking_number": record.tracking_number,
-                    "recipient_name": record.recipient_name,
-                    "courier_company": record.courier_company,
+                    "doc_title": record.doc_title,
+                    "sender": record.sender,
                     "status": record.status.value if record.status else None,
                     "created_at": record.created_at.isoformat() if record.created_at else None,
                     "files": {

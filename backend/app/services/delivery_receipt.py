@@ -11,19 +11,21 @@ class DeliveryReceiptService:
     def create_delivery_receipt(
         self,
         tracking_number: str,
-        recipient_name: str,
-        recipient_address: str,
-        sender_name: str,
-        courier_company: str,
+        doc_title: str = "送达回证",
+        sender: str = None,
+        send_time: str = None,
+        send_location: str = None,
+        receiver: str = None,
         **kwargs
     ) -> DeliveryReceipt:
         """创建送达回证"""
         receipt = DeliveryReceipt(
             tracking_number=tracking_number,
-            recipient_name=recipient_name,
-            recipient_address=recipient_address,
-            sender_name=sender_name,
-            courier_company=courier_company,
+            doc_title=doc_title,
+            sender=sender,
+            send_time=send_time,
+            send_location=send_location,
+            receiver=receiver,
             **kwargs
         )
         self.db.add(receipt)

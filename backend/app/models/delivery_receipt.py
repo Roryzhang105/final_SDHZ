@@ -18,19 +18,8 @@ class DeliveryReceipt(BaseModel):
     
     # 基本信息 - 只有tracking_number是必填的
     tracking_number = Column(String(50), unique=True, index=True, nullable=False)
-    recipient_name = Column(String(100))  # 改为可选
-    recipient_phone = Column(String(20))
-    recipient_address = Column(Text)  # 改为可选
     
-    # 发件人信息
-    sender_name = Column(String(100))  # 改为可选
-    sender_address = Column(Text)
-    
-    # 快递公司信息
-    courier_company = Column(String(50))  # 改为可选
-    courier_code = Column(String(20))
-    
-    # 送达回证相关信息（对应insert_imgs_delivery_receipt.py的参数）
+    # 送达回证相关信息（严格对应insert_imgs_delivery_receipt.py的参数）
     doc_title = Column(String(200), default="送达回证")  # 送达文书名称及文号
     sender = Column(String(100))        # 送达人
     send_time = Column(String(50))      # 送达时间

@@ -26,6 +26,18 @@ class DeliveryReceiptGeneratorService:
         self.output_dir = Path(settings.UPLOAD_DIR) / "delivery_receipts"
         self.output_dir.mkdir(exist_ok=True)
         
+    def _format_timestamp_to_chinese(self, timestamp: datetime) -> str:
+        """
+        将时间戳转换为中文格式: "xxxx年xx月xx日xx时"
+        
+        Args:
+            timestamp: 时间戳对象
+            
+        Returns:
+            格式化的中文时间字符串
+        """
+        return f"{timestamp.year}年{timestamp.month:02d}月{timestamp.day:02d}日{timestamp.hour:02d}时"
+    
     def generate_delivery_receipt(
         self,
         tracking_number: str,
@@ -74,7 +86,18 @@ class DeliveryReceiptGeneratorService:
                 receipt.receiver = receiver
                 self.db.commit()
             
-            # 2. 获取二维码和截图文件路径
+            # 2. 自动生成send_time（如果未提供且有跟踪信息）
+            if not send_time:
+                tracking_info = self.db.query(TrackingInfo).join(DeliveryReceipt).filter(
+                    DeliveryReceipt.tracking_number == tracking_number
+                ).first()
+                
+                if tracking_info and tracking_info.last_update:
+                    send_time = self._format_timestamp_to_chinese(tracking_info.last_update)
+                    receipt.send_time = send_time
+                    self.db.commit()
+            
+            # 3. 获取二维码和截图文件路径
             qr_image_path, screenshot_path = self._get_required_files(tracking_number, receipt)
             
             if not qr_image_path:
@@ -91,7 +114,7 @@ class DeliveryReceiptGeneratorService:
                     "tracking_number": tracking_number
                 }
             
-            # 3. 生成Word文档
+            # 4. 生成Word文档
             doc_result = self._generate_word_document(
                 tracking_number=tracking_number,
                 doc_title=doc_title,
@@ -106,7 +129,7 @@ class DeliveryReceiptGeneratorService:
             if not doc_result["success"]:
                 return doc_result
             
-            # 4. 更新数据库记录
+            # 5. 更新数据库记录
             receipt.delivery_receipt_doc_path = doc_result["doc_path"]
             self.db.commit()
             

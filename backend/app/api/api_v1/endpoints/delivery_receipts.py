@@ -72,33 +72,29 @@ async def generate_delivery_receipt(
 @router.post("/")
 async def create_delivery_receipt_legacy(
     tracking_number: str = Form(...),
-    recipient_name: str = Form(None),
-    recipient_address: str = Form(None),
-    sender_name: str = Form(None),
-    courier_company: str = Form(None),
+    doc_title: str = Form("送达回证"),
+    sender: str = Form(None),
+    send_time: str = Form(None), 
+    send_location: str = Form(None),
+    receiver: str = Form(None),
     background_tasks: BackgroundTasks = None,
-    recipient_phone: str = Form(None),
-    sender_address: str = Form(None),
-    courier_code: str = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     创建送达回证（兼容旧版API）
-    现在只需要tracking_number，其他字段都是可选的
+    只需要tracking_number必填，其他字段都是可选的
     """
     service = DeliveryReceiptService(db)
     
-    # 使用新的可选字段创建方式
+    # 使用新的字段创建方式
     from app.models.delivery_receipt import DeliveryReceipt
     receipt = DeliveryReceipt(
         tracking_number=tracking_number,
-        recipient_name=recipient_name,
-        recipient_address=recipient_address,
-        sender_name=sender_name,
-        courier_company=courier_company,
-        recipient_phone=recipient_phone,
-        sender_address=sender_address,
-        courier_code=courier_code
+        doc_title=doc_title,
+        sender=sender,
+        send_time=send_time,
+        send_location=send_location,
+        receiver=receiver
     )
     
     service.db.add(receipt)
