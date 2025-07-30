@@ -6,6 +6,8 @@ from app.core.config import settings
 from app.core.database import engine
 from app.models.base import Base
 from app.api.api_v1.api import api_router
+# 导入所有模型以确保表被创建
+from app.models import Task, User, DeliveryReceipt, Courier, TrackingInfo, RecognitionTask, RecognitionResult, CourierPattern
 
 
 @asynccontextmanager

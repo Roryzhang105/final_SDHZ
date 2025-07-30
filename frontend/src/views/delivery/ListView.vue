@@ -239,6 +239,7 @@ import {
   Download,
   Picture
 } from '@element-plus/icons-vue'
+import { tasksApi } from '@/api/tasks'
 
 const router = useRouter()
 
@@ -280,18 +281,15 @@ const fetchList = async () => {
   loading.value = true
   try {
     const params = {
-      page: pagination.page,
-      size: pagination.size,
-      task_id: filterForm.taskId,
-      tracking_number: filterForm.trackingNumber,
-      status: filterForm.status,
-      sort_by: filterForm.sortBy
+      limit: pagination.size,
+      offset: (pagination.page - 1) * pagination.size,
+      status: filterForm.status
     }
     
-    // 模拟API调用
-    const response = await mockApiCall(params)
-    tableData.value = response.data.items
-    pagination.total = response.data.total
+    // 调用真实API
+    const response = await tasksApi.getTaskList(params)
+    tableData.value = response.data.items || []
+    pagination.total = response.data.total || 0
   } catch (error) {
     console.error('获取任务列表失败:', error)
     ElMessage.error('获取任务列表失败')
@@ -300,61 +298,6 @@ const fetchList = async () => {
   }
 }
 
-// 模拟API调用 (实际项目中应该调用真实API)
-const mockApiCall = async (params: any) => {
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  
-  // 模拟数据
-  const mockData = [
-    {
-      id: 1,
-      task_id: 'task_1151242358360',
-      tracking_number: '1151242358360',
-      status: 'completed',
-      created_at: '2024-01-30 14:30:00',
-      updated_at: '2024-01-30 15:45:00',
-      image_url: '/uploads/image1.jpg',
-      qr_result: '1151242358360',
-      document_url: '/downloads/receipt1.docx'
-    },
-    {
-      id: 2,
-      task_id: 'task_1151240728560',
-      tracking_number: '1151240728560',
-      status: 'generating',
-      created_at: '2024-01-30 13:45:00',
-      updated_at: '2024-01-30 14:20:00',
-      image_url: '/uploads/image2.jpg',
-      qr_result: '1151240728560'
-    },
-    {
-      id: 3,
-      task_id: 'task_1151238971060',
-      tracking_number: null,
-      status: 'recognizing',
-      created_at: '2024-01-30 12:20:00',
-      updated_at: '2024-01-30 12:25:00',
-      image_url: '/uploads/image3.jpg'
-    },
-    {
-      id: 4,
-      task_id: 'task_1151235647120',
-      tracking_number: null,
-      status: 'failed',
-      created_at: '2024-01-30 11:15:00',
-      updated_at: '2024-01-30 11:20:00',
-      image_url: '/uploads/image4.jpg',
-      error_message: '图片中未检测到清晰的二维码'
-    }
-  ]
-  
-  return {
-    data: {
-      items: mockData,
-      total: mockData.length
-    }
-  }
-}
 
 // 状态类型映射
 const getStatusType = (status: string) => {

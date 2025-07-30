@@ -36,6 +36,7 @@
           :on-error="handleUploadError"
           :before-upload="beforeUpload"
           :on-progress="handleProgress"
+          name="file"
           multiple
           accept="image/jpeg,image/jpg,image/png"
           list-type="picture-card"
@@ -204,7 +205,7 @@ const uploadResults = ref<UploadResult[]>([])
 
 // 上传配置
 const uploadUrl = computed(() => {
-  return `${import.meta.env.VITE_API_BASE_URL}/api/v1/upload/image`
+  return `${import.meta.env.VITE_API_BASE_URL}/api/v1/tasks/upload`
 })
 
 const uploadHeaders = computed(() => {

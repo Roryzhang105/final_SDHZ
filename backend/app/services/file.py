@@ -28,10 +28,14 @@ class FileService:
         with open(file_path, "wb") as f:
             f.write(content)
         
+        # 生成文件访问URL
+        file_url = f"/static/uploads/{filename}"
+        
         return {
             "file_id": file_id,
             "filename": file.filename,
             "file_path": file_path,
+            "file_url": file_url,
             "size": len(content)
         }
 

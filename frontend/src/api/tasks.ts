@@ -23,7 +23,7 @@ export const tasksApi = {
     formData.append('file', file)
     
     return request({
-      url: '/api/v1/upload/file',
+      url: '/api/v1/tasks/upload',
       method: 'POST',
       data: formData,
       headers: {
@@ -44,7 +44,7 @@ export const tasksApi = {
     })
     
     return request({
-      url: '/api/v1/upload/files',
+      url: '/api/v1/tasks/upload/batch',
       method: 'POST',
       data: formData,
       headers: {

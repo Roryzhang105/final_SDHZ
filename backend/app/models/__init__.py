@@ -4,6 +4,7 @@ from .delivery_receipt import DeliveryReceipt
 from .courier import Courier
 from .tracking import TrackingInfo
 from .recognition import RecognitionTask, RecognitionResult, CourierPattern
+from .task import Task, TaskStatusEnum
 
 __all__ = [
     "Base",
@@ -13,5 +14,7 @@ __all__ = [
     "TrackingInfo",
     "RecognitionTask",
     "RecognitionResult", 
-    "CourierPattern"
+    "CourierPattern",
+    "Task",
+    "TaskStatusEnum"
 ]
