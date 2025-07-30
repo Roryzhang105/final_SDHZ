@@ -25,6 +25,8 @@ body {
 #app {
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Element Plus 样式覆盖 */

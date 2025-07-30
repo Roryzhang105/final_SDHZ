@@ -1,7 +1,7 @@
 <template>
   <el-container class="main-layout">
     <!-- 侧边栏 -->
-    <el-aside :width="sidebarCollapsed ? '64px' : '200px'" class="sidebar">
+    <el-aside :width="sidebarCollapsed ? '64px' : '250px'" class="sidebar">
       <div class="logo-container">
         <img v-if="!sidebarCollapsed" src="/favicon.ico" alt="Logo" class="logo" />
         <h1 v-if="!sidebarCollapsed" class="app-title">送达回证系统</h1>
@@ -50,7 +50,7 @@
       </el-menu>
     </el-aside>
     
-    <el-container>
+    <el-container class="right-container">
       <!-- 顶部导航栏 -->
       <el-header class="header">
         <div class="header-left">
@@ -234,12 +234,17 @@ watch(
 <style scoped>
 .main-layout {
   height: 100vh;
+  display: flex !important;
+  flex-direction: row !important;
 }
 
 .sidebar {
   background-color: #304156;
   transition: width 0.3s ease;
   overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
 }
 
 .logo-container {
@@ -270,7 +275,7 @@ watch(
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
-  width: 200px;
+  width: 250px;
 }
 
 .header {
@@ -325,10 +330,19 @@ watch(
   color: #606266;
 }
 
+.right-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .main-content {
   background-color: #f0f2f5;
   overflow-y: auto;
   padding: 20px;
+  flex: 1;
+  min-width: 0;
 }
 
 /* 页面切换动画 */
@@ -364,6 +378,25 @@ watch(
   .username {
     display: none;
   }
+}
+
+/* Element Plus 容器修复 */
+.main-layout :deep(.el-container) {
+  height: 100%;
+}
+
+.main-layout :deep(.el-aside) {
+  flex-shrink: 0;
+}
+
+.main-layout :deep(.el-header) {
+  height: 60px;
+  line-height: 60px;
+  padding: 0;
+}
+
+.main-layout :deep(.el-main) {
+  padding: 0;
 }
 
 /* 滚动条样式 */
