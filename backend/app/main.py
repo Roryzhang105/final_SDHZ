@@ -24,25 +24,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 设置CORS
+# 设置CORS - 优化配置以正确处理预检请求
 cors_origins = settings.get_cors_origins()
-if cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    # 开发模式下允许所有来源（仅用于开发）
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+if not cors_origins:
+    # 开发模式下的默认配置，包含前端开发服务器地址
+    cors_origins = [
+        "http://localhost:5173",  # Vite默认端口
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",  # 备用端口
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",  # 后端自身
+        "http://127.0.0.1:8080"
+    ]
+
+# 开发模式：允许所有来源
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 开发模式下允许所有来源
+    allow_credentials=False,  # 当允许所有来源时，必须设为False
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
+)
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
