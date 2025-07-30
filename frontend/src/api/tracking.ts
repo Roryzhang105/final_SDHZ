@@ -10,6 +10,11 @@ export const trackingApi = {
     return request.get(`/api/v1/tracking/${trackingNumber}`)
   },
 
+  // 查询物流信息（别名，用于组件调用）
+  query(trackingNumber: string): Promise<ApiResponse<TrackingInfo>> {
+    return request.get(`/api/v1/tracking/${trackingNumber}`)
+  },
+
   // 更新物流信息
   updateInfo(trackingNumber: string): Promise<ApiResponse<TrackingInfo>> {
     return request.post(`/api/v1/tracking/${trackingNumber}/update`)

@@ -8,7 +8,7 @@ import type {
 
 export const qrApi = {
   // 生成二维码
-  generate(data: QRCodeGenerateRequest): Promise<ApiResponse<QRCodeGenerateResponse>> {
+  generate(data: any): Promise<ApiResponse<any>> {
     return request.post('/api/v1/qr-generation/generate', data)
   },
 
@@ -17,8 +17,17 @@ export const qrApi = {
     return request.post('/api/v1/qr-generation/label', data)
   },
 
-  // 识别二维码
-  recognize(file: File): Promise<ApiResponse<QRCodeRecognizeResponse>> {
+  // 识别二维码（支持FormData）
+  recognize(data: FormData): Promise<ApiResponse<QRCodeRecognizeResponse>> {
+    return request.post('/api/v1/qr-recognition/recognize', data, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+
+  // 识别二维码（支持File）
+  recognizeFile(file: File): Promise<ApiResponse<QRCodeRecognizeResponse>> {
     const formData = new FormData()
     formData.append('file', file)
     
