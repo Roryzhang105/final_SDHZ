@@ -56,7 +56,7 @@ const routes: Array<RouteRecordRaw> = [
             name: 'DeliveryGenerate',
             component: () => import('@/views/delivery/GenerateView.vue'),
             meta: {
-              title: '生成回证',
+              title: '上传图片',
               requiresAuth: true
             }
           },
@@ -65,61 +65,12 @@ const routes: Array<RouteRecordRaw> = [
             name: 'DeliveryList',
             component: () => import('@/views/delivery/ListView.vue'),
             meta: {
-              title: '回证列表',
+              title: '任务列表',
               requiresAuth: true
             }
           }
         ]
       },
-      {
-        path: '/tracking',
-        name: 'Tracking',
-        component: () => import('@/views/tracking/IndexView.vue'),
-        meta: {
-          title: '物流跟踪',
-          icon: 'Van',
-          requiresAuth: true
-        }
-      },
-      {
-        path: '/qr',
-        name: 'QR',
-        meta: {
-          title: '二维码管理',
-          icon: 'Grid',
-          requiresAuth: true
-        },
-        children: [
-          {
-            path: '/qr/generate',
-            name: 'QRGenerate',
-            component: () => import('@/views/qr/GenerateView.vue'),
-            meta: {
-              title: '生成二维码',
-              requiresAuth: true
-            }
-          },
-          {
-            path: '/qr/recognize',
-            name: 'QRRecognize',
-            component: () => import('@/views/qr/RecognizeView.vue'),
-            meta: {
-              title: '识别二维码',
-              requiresAuth: true
-            }
-          }
-        ]
-      },
-      {
-        path: '/files',
-        name: 'Files',
-        component: () => import('@/views/files/IndexView.vue'),
-        meta: {
-          title: '文件管理',
-          icon: 'Folder',
-          requiresAuth: true
-        }
-      }
     ]
   },
   {
