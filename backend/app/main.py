@@ -55,8 +55,24 @@ app.add_middleware(
 )
 
 # 配置静态文件服务
-uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-app.mount("/static/uploads", StaticFiles(directory="uploads"), name="uploads")
+uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/static/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+# 配置物流截图静态文件服务
+tracking_screenshots_dir = os.path.join(uploads_dir, "tracking_screenshots")
+os.makedirs(tracking_screenshots_dir, exist_ok=True)
+app.mount("/static/tracking_screenshots", StaticFiles(directory=tracking_screenshots_dir), name="tracking_screenshots")
+
+# 配置物流HTML静态文件服务
+tracking_html_dir = os.path.join(uploads_dir, "tracking_html")
+os.makedirs(tracking_html_dir, exist_ok=True)
+app.mount("/static/tracking_html", StaticFiles(directory=tracking_html_dir), name="tracking_html")
+
+# 配置送达回证文档静态文件服务
+documents_dir = os.path.join(uploads_dir, "delivery_receipts")
+os.makedirs(documents_dir, exist_ok=True)
+app.mount("/static/documents", StaticFiles(directory=documents_dir), name="documents")
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)

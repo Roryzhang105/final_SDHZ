@@ -87,12 +87,12 @@
           <template #default="{ row }">
             <div class="progress-container">
               <el-progress
-                :percentage="getProgressPercentage(row.status)"
+                :percentage="row.progress || getProgressPercentage(row.status)"
                 :status="getProgressStatus(row.status)"
                 :stroke-width="12"
                 :show-text="false"
               />
-              <span class="progress-text">{{ getProgressPercentage(row.status) }}%</span>
+              <span class="progress-text">{{ row.progress || getProgressPercentage(row.status) }}%</span>
             </div>
           </template>
         </el-table-column>
@@ -150,7 +150,7 @@
             {{ formatDateTime(currentTask.updated_at) }}
           </el-descriptions-item>
           <el-descriptions-item label="完成进度">
-            {{ getProgressPercentage(currentTask.status) }}%
+            {{ currentTask.progress || getProgressPercentage(currentTask.status) }}%
           </el-descriptions-item>
         </el-descriptions>
         

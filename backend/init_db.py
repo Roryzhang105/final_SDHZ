@@ -14,6 +14,7 @@ from app.models.delivery_receipt import DeliveryReceipt
 from app.models.courier import Courier
 from app.models.tracking import TrackingInfo
 from app.models.recognition import RecognitionTask, RecognitionResult, CourierPattern
+from app.services.auth import AuthService
 
 
 def create_database_if_not_exists():
@@ -111,6 +112,43 @@ def init_courier_data():
         db.close()
 
 
+def init_admin_user():
+    """初始化管理员用户"""
+    db = SessionLocal()
+    try:
+        auth_service = AuthService(db)
+        
+        # 检查是否已存在admin用户
+        existing_admin = auth_service.get_user_by_username("admin")
+        if existing_admin:
+            print("管理员用户已存在，跳过创建")
+            return True
+        
+        # 创建管理员用户
+        admin_user = auth_service.create_user(
+            username="admin",
+            email="admin@example.com",
+            password="admin123",
+            full_name="系统管理员"
+        )
+        
+        # 设置为超级用户
+        admin_user.is_superuser = True
+        admin_user.is_active = True
+        db.commit()
+        
+        print("✅ 创建默认管理员用户: admin/admin123")
+        print("⚠️  请在首次登录后修改默认密码!")
+        return True
+        
+    except Exception as e:
+        print(f"创建管理员用户失败: {e}")
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+
 def main():
     """主函数"""
     print("开始初始化数据库...")
@@ -127,7 +165,11 @@ def main():
     if not init_courier_data():
         return False
     
-    print("数据库初始化完成！")
+    # 4. 创建管理员用户
+    if not init_admin_user():
+        return False
+    
+    print("🎉 数据库初始化完成！")
     return True
 
 

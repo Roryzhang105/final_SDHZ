@@ -160,17 +160,26 @@ class DeliveryReceiptGeneratorService:
             # 3. 获取二维码和截图文件路径
             qr_image_path, screenshot_path = self._get_required_files(tracking_number, receipt)
             
+            print(f"文件路径查找结果 - 快递单号: {tracking_number}")
+            print(f"  二维码文件路径: {qr_image_path}")
+            print(f"  截图文件路径: {screenshot_path}")
+            print(f"  DeliveryReceipt ID: {receipt.id if receipt else 'None'}")
+            
             if not qr_image_path:
+                error_msg = f"未找到快递单号 {tracking_number} 对应的二维码文件，请先生成二维码"
+                print(f"ERROR: {error_msg}")
                 return {
                     "success": False,
-                    "error": f"未找到快递单号 {tracking_number} 对应的二维码文件，请先生成二维码",
+                    "error": error_msg,
                     "tracking_number": tracking_number
                 }
             
             if not screenshot_path:
+                error_msg = f"未找到快递单号 {tracking_number} 对应的物流截图，请先生成截图"
+                print(f"ERROR: {error_msg}")
                 return {
                     "success": False,
-                    "error": f"未找到快递单号 {tracking_number} 对应的物流截图，请先生成截图",
+                    "error": error_msg,
                     "tracking_number": tracking_number
                 }
             
@@ -223,6 +232,15 @@ class DeliveryReceiptGeneratorService:
         qr_image_path = None
         screenshot_path = None
         
+        print(f"DEBUG: 开始查找文件 - 快递单号: {tracking_number}")
+        print(f"DEBUG: DeliveryReceipt字段:")
+        if receipt:
+            print(f"  - receipt_file_path: {receipt.receipt_file_path}")
+            print(f"  - qr_code_path: {receipt.qr_code_path}")
+            print(f"  - tracking_screenshot_path: {receipt.tracking_screenshot_path}")
+        else:
+            print("  - Receipt为空")
+        
         # 项目根目录路径
         project_root = Path(__file__).parent.parent.parent
         
@@ -259,11 +277,25 @@ class DeliveryReceiptGeneratorService:
             DeliveryReceipt.tracking_number == tracking_number
         ).first()
         
+        print(f"DEBUG: TrackingInfo查询结果:")
+        if tracking_info:
+            print(f"  - TrackingInfo ID: {tracking_info.id}")
+            print(f"  - screenshot_path: {tracking_info.screenshot_path}")
+            print(f"  - screenshot_filename: {tracking_info.screenshot_filename}")
+        else:
+            print("  - TrackingInfo为空")
+        
         if tracking_info and tracking_info.screenshot_path:
             screenshot_path = resolve_file_path(tracking_info.screenshot_path)
+            print(f"DEBUG: 从TrackingInfo解析截图路径: {screenshot_path}")
         
         if not screenshot_path and receipt.tracking_screenshot_path:
             screenshot_path = resolve_file_path(receipt.tracking_screenshot_path)
+            print(f"DEBUG: 从DeliveryReceipt解析截图路径: {screenshot_path}")
+        
+        print(f"DEBUG: 最终文件路径:")
+        print(f"  - qr_image_path: {qr_image_path}")
+        print(f"  - screenshot_path: {screenshot_path}")
         
         return qr_image_path, screenshot_path
     

@@ -114,6 +114,7 @@ async def get_task_detail(
             "tracking_data": task.tracking_data,
             "document_url": task.document_url,
             "screenshot_url": task.screenshot_url,
+            "extra_metadata": task.extra_metadata,
             "error_message": task.error_message,
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
@@ -218,6 +219,29 @@ async def retry_task(
         "success": True,
         "message": "任务重试成功"
     }
+
+
+@router.post("/{task_id}/check-progress")
+async def check_task_progress(
+    task_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    检查并更新任务进度
+    """
+    service = TaskService(db)
+    updated = await service.check_and_update_task_progress(task_id)
+    
+    if updated:
+        return {
+            "success": True,
+            "message": "任务进度已更新"
+        }
+    else:
+        return {
+            "success": True,
+            "message": "任务进度无需更新"
+        }
 
 
 @router.delete("/{task_id}")

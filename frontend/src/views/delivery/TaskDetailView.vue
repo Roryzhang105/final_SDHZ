@@ -145,12 +145,24 @@
         >
           <div class="timeline-content">
             <h4>等待签收</h4>
-            <div v-if="taskInfo.status === 'delivered'">
+            <div v-if="taskInfo.status === 'delivered' || taskInfo.delivery_time">
               <p class="success-text">✓ 已签收</p>
               <p>快递已成功签收，可以生成回证</p>
+              <p v-if="taskInfo.delivery_time">
+                <strong>签收时间:</strong> {{ formatDateTime(taskInfo.delivery_time) }}
+              </p>
             </div>
-            <div v-else-if="isStepCompleted('tracking')">
-              <p class="error-text">❌ 物流查询失败</p>
+            <div v-else-if="taskInfo.status === 'failed' && taskInfo.tracking_data">
+              <p class="error-text">❌ 快递尚未签收</p>
+              <p class="error-detail">快递还在运输中，暂时无法生成回证</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'failed'">
+              <p class="error-text">❌ 无法获取签收信息</p>
+              <p class="error-detail">{{ taskInfo.error_message || '物流查询失败' }}</p>
+            </div>
+            <div v-else-if="taskInfo.tracking_data && !taskInfo.tracking_data.is_signed">
+              <p class="processing-text">🚛 运输中</p>
+              <p>快递正在运输中，等待签收</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待物流信息</p>
@@ -169,9 +181,31 @@
             <div v-if="taskInfo.status === 'completed'">
               <p class="success-text">✓ 文档已生成</p>
               <p>送达回证文档生成完成</p>
+              <div class="generated-files">
+                <p v-if="taskInfo.document_url"><strong>📄 送达回证:</strong> 已生成</p>
+                <p v-if="taskInfo.screenshot_url"><strong>📊 物流截图:</strong> 已生成</p>
+                <p v-if="taskInfo.extra_metadata?.qr_label_url"><strong>🏷️ 二维码标签:</strong> 已生成</p>
+              </div>
             </div>
             <div v-else-if="taskInfo.status === 'generating'">
-              <p class="processing-text">📝 正在生成文档</p>
+              <p class="processing-text">📝 正在生成文档...</p>
+              <p>正在生成物流截图、二维码标签和送达回证</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'failed' && (taskInfo.screenshot_url || taskInfo.extra_metadata?.qr_label_url)">
+              <p class="error-text">❌ 文档生成失败</p>
+              <p class="error-detail">{{ taskInfo.error_message || '送达回证生成失败' }}</p>
+              <div class="generated-files">
+                <p v-if="taskInfo.screenshot_url" class="success-text"><strong>📊 物流截图:</strong> 已生成</p>
+                <p v-if="taskInfo.extra_metadata?.qr_label_url" class="success-text"><strong>🏷️ 二维码标签:</strong> 已生成</p>
+                <p class="error-text"><strong>📄 送达回证:</strong> 生成失败</p>
+              </div>
+            </div>
+            <div v-else-if="taskInfo.status === 'failed'">
+              <p class="error-text">❌ 文档生成失败</p>
+              <p class="error-detail">{{ taskInfo.error_message || '文档生成过程中出现错误' }}</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'delivered'">
+              <p class="pending-text">⏳ 准备生成文档</p>
             </div>
             <div v-else>
               <p class="pending-text">⏳ 等待生成</p>
@@ -353,6 +387,28 @@
               </div>
             </div>
 
+            <!-- 二维码条形码标签 -->
+            <div class="download-item">
+              <div class="file-info">
+                <el-icon class="file-icon" color="#F56C6C"><Document /></el-icon>
+                <div class="file-details">
+                  <h4>二维码条形码标签</h4>
+                  <p class="file-desc">合成的标签图片</p>
+                </div>
+              </div>
+              <div class="file-actions">
+                <el-button
+                  v-if="taskInfo.extra_metadata?.qr_label_url"
+                  type="success"
+                  :icon="Download"
+                  @click="handleDownload('qr_label')"
+                >
+                  下载
+                </el-button>
+                <el-tag v-else type="info">未生成</el-tag>
+              </div>
+            </div>
+
             <!-- 上传的原图 -->
             <div class="download-item">
               <div class="file-info">
@@ -398,6 +454,17 @@
       </el-button>
 
       <el-button 
+        v-if="taskInfo.status === 'failed'"
+        type="warning" 
+        size="large"
+        :loading="retrying"
+        @click="handleRetry"
+      >
+        <el-icon><Refresh /></el-icon>
+        重试任务
+      </el-button>
+
+      <el-button 
         v-if="taskInfo.status === 'completed'"
         type="success" 
         size="large"
@@ -411,7 +478,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
@@ -424,7 +491,8 @@ import {
   Picture,
   Camera,
   ArrowLeft,
-  FolderOpened
+  FolderOpened,
+  Refresh
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
 
@@ -449,6 +517,7 @@ const trackingInfo = ref(null)
 const isEditing = ref(false)
 const saving = ref(false)
 const generating = ref(false)
+const retrying = ref(false)
 const formRef = ref<FormInstance>()
 
 // 表单数据
@@ -501,7 +570,13 @@ const isStepCompleted = (step: string) => {
   const stepIndex = stepOrder.indexOf(step)
   
   if (taskInfo.value.status === 'failed') {
-    return step === 'uploaded' // 失败状态下只有上传是完成的
+    // 失败状态下根据已有数据判断完成了哪些步骤
+    if (step === 'uploaded') return true  // 上传肯定完成了
+    if (step === 'recognized' && (taskInfo.value.qr_code || taskInfo.value.tracking_number)) return true
+    if (step === 'tracking' && taskInfo.value.tracking_data) return true
+    if (step === 'delivered' && taskInfo.value.delivery_time) return true
+    if (step === 'generating' && taskInfo.value.document_url) return true
+    return false
   }
   
   return stepIndex <= currentIndex
@@ -523,10 +598,23 @@ const getStepFromStatus = (status: string) => {
 
 // 获取时间线类型
 const getTimelineType = (step: string) => {
-  if (taskInfo.value.status === 'failed' && step !== 'uploaded') {
-    return 'danger'
+  if (taskInfo.value.status === 'failed') {
+    // 失败状态下，已完成的步骤显示成功，未完成的显示危险
+    return isStepCompleted(step) ? 'success' : 'danger'
   }
-  return isStepCompleted(step) ? 'success' : 'info'
+  
+  // 正常状态下，已完成显示成功，未完成显示信息
+  if (isStepCompleted(step)) {
+    return 'success'
+  }
+  
+  // 当前正在进行的步骤显示警告色
+  const currentStep = getStepFromStatus(taskInfo.value.status)
+  if (step === currentStep) {
+    return 'warning'
+  }
+  
+  return 'info'
 }
 
 // 格式化日期时间
@@ -659,12 +747,13 @@ const handleManualGenerate = async () => {
 }
 
 // 下载文件
-const handleDownload = async (type: 'document' | 'screenshot' | 'image') => {
+const handleDownload = async (type: 'document' | 'screenshot' | 'image' | 'qr_label') => {
   try {
     const fileMap = {
       document: { url: taskInfo.value.document_url, name: `送达回证_${taskInfo.value.tracking_number}.docx` },
       screenshot: { url: taskInfo.value.screenshot_url, name: `物流截图_${taskInfo.value.tracking_number}.png` },
-      image: { url: taskInfo.value.image_url, name: `原图_${taskInfo.value.task_id}.jpg` }
+      image: { url: taskInfo.value.image_url, name: `原图_${taskInfo.value.task_id}.jpg` },
+      qr_label: { url: taskInfo.value.extra_metadata?.qr_label_url, name: `二维码标签_${taskInfo.value.tracking_number}.png` }
     }
     
     const file = fileMap[type]
@@ -673,7 +762,18 @@ const handleDownload = async (type: 'document' | 'screenshot' | 'image') => {
       return
     }
     
-    // 模拟下载
+    // 使用getImageUrl处理URL
+    const downloadUrl = getImageUrl(file.url)
+    
+    // 创建下载链接
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = file.name
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
     ElMessage.success(`开始下载 ${file.name}`)
     
   } catch (error) {
@@ -693,9 +793,69 @@ const handleDownloadAll = async () => {
   }
 }
 
+// 重试任务
+const handleRetry = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要重试这个任务吗？系统会根据当前进度从合适的步骤开始重新处理。',
+      '确认重试',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    retrying.value = true
+    
+    // 调用重试API
+    const response = await tasksApi.retryTask(taskInfo.value.task_id)
+    
+    if (response.success) {
+      ElMessage.success('任务重试已启动，请稍候查看处理结果')
+      // 重新获取任务详情
+      await fetchTaskDetail(taskInfo.value.task_id)
+      // 重启自动刷新
+      startAutoRefresh(taskInfo.value.task_id)
+    } else {
+      throw new Error(response.message || '重试失败')
+    }
+    
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('重试失败:', error)
+      ElMessage.error('重试失败，请稍后再试')
+    }
+  } finally {
+    retrying.value = false
+  }
+}
+
 // 返回列表
 const handleBack = () => {
   router.push('/app/delivery/list')
+}
+
+// 自动刷新任务详情
+let refreshTimer: number | null = null
+
+const startAutoRefresh = (taskId: string) => {
+  refreshTimer = window.setInterval(() => {
+    // 只有在任务还在处理中时才自动刷新
+    if (['pending', 'recognizing', 'tracking', 'delivered', 'generating'].includes(taskInfo.value.status)) {
+      fetchTaskDetail(taskId)
+    } else {
+      // 任务已完成或失败，停止自动刷新
+      stopAutoRefresh()
+    }
+  }, 5000) // 每5秒刷新一次
+}
+
+const stopAutoRefresh = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 }
 
 // 组件挂载时获取数据
@@ -703,10 +863,16 @@ onMounted(() => {
   const taskId = route.params.id as string
   if (taskId) {
     fetchTaskDetail(taskId)
+    startAutoRefresh(taskId)
   } else {
     ElMessage.error('任务ID不存在')
     router.push('/app/delivery/list')
   }
+})
+
+// 组件卸载时停止自动刷新
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -845,6 +1011,16 @@ onMounted(() => {
   font-size: 11px;
   text-align: center;
   margin-top: 8px;
+}
+
+.generated-files {
+  margin-top: 10px;
+}
+
+.generated-files p {
+  margin: 3px 0;
+  font-size: 13px;
+  color: #67c23a;
 }
 
 .success-text {

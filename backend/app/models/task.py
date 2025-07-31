@@ -75,14 +75,28 @@ class Task(BaseModel):
     @property
     def progress_percentage(self):
         """获取任务进度百分比"""
+        # 如果任务失败，根据已完成的步骤计算进度
+        if self.status == TaskStatusEnum.FAILED:
+            # 根据已有数据判断任务进行到了哪一步
+            if self.document_url:  # 如果有文档，说明接近完成
+                return 90
+            elif self.tracking_data:  # 如果有物流数据，说明至少完成了跟踪
+                return 50
+            elif self.tracking_number:  # 如果有快递单号，说明完成了识别
+                return 30
+            elif self.qr_code:  # 如果有二维码内容，说明部分识别成功
+                return 15
+            else:
+                return 0
+        
+        # 正常状态的进度映射
         progress_map = {
             TaskStatusEnum.PENDING: 0,
             TaskStatusEnum.RECOGNIZING: 20,
             TaskStatusEnum.TRACKING: 40,
             TaskStatusEnum.DELIVERED: 60,
             TaskStatusEnum.GENERATING: 80,
-            TaskStatusEnum.COMPLETED: 100,
-            TaskStatusEnum.FAILED: 0
+            TaskStatusEnum.COMPLETED: 100
         }
         return progress_map.get(self.status, 0)
     
