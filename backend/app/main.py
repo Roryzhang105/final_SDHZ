@@ -43,13 +43,29 @@ if not cors_origins:
         "http://127.0.0.1:8080"
     ]
 
-# 开发模式：允许所有来源
+# 开发模式：允许所有来源，优化frp环境支持
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 开发模式下允许所有来源
     allow_credentials=False,  # 当允许所有来源时，必须设为False
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_headers=[
+        "*",
+        "Content-Type",
+        "Authorization", 
+        "Accept",
+        "Accept-Language",
+        "Accept-Encoding",
+        "Connection",
+        "User-Agent",
+        "Cache-Control",
+        "Origin",
+        "Referer",
+        "X-Requested-With",
+        "X-Forwarded-For",
+        "X-Forwarded-Proto",
+        "X-Real-IP"
+    ],
     expose_headers=["*"],
     max_age=3600,
 )
@@ -86,3 +102,26 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/debug/connection")
+async def debug_connection():
+    """调试连接端点，返回请求信息"""
+    from fastapi import Request
+    
+    return {
+        "status": "connected",
+        "message": "后端连接正常",
+        "timestamp": __import__('datetime').datetime.now().isoformat(),
+        "server_info": {
+            "host": "0.0.0.0",
+            "port": 8000,
+            "cors_enabled": True
+        }
+    }
+
+
+@app.options("/api/v1/auth/login")
+async def options_login():
+    """处理登录端点的OPTIONS预检请求"""
+    return {"message": "OPTIONS OK"}

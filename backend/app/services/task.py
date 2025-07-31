@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import desc
+from sqlalchemy.orm.exc import DetachedInstanceError
 from typing import List, Optional, Dict, Any
 from fastapi import UploadFile
 import os
@@ -60,7 +61,7 @@ class TaskService:
             print(f"任务保存成功到数据库: id={task.id}, task_id={task.task_id}")
             
             # 3. 启动异步二维码识别（不等待完成）
-            asyncio.create_task(self._trigger_qr_recognition(task))
+            asyncio.create_task(self._trigger_qr_recognition(task.task_id))
             
             return {
                 "success": True,
@@ -185,13 +186,13 @@ class TaskService:
                     self.db.commit()
                     
                     print(f"更新任务状态为已签收 - 任务: {task.task_id}")
-                    asyncio.create_task(self._trigger_document_generation(task))
+                    asyncio.create_task(self._trigger_document_generation(task.task_id))
                     return True
             
             # 如果任务处于DELIVERED状态但没有文档，触发文档生成
             elif task.status == TaskStatusEnum.DELIVERED and not task.document_url:
                 print(f"重新触发文档生成 - 任务: {task.task_id}")
-                asyncio.create_task(self._trigger_document_generation(task))
+                asyncio.create_task(self._trigger_document_generation(task.task_id))
                 return True
             
             return False
@@ -222,15 +223,15 @@ class TaskService:
             if task.qr_code and task.tracking_number and not task.tracking_data:
                 # 有二维码和快递单号但没有物流数据，从物流查询开始
                 print(f"从物流查询步骤开始重试 - 任务: {task.task_id}")
-                asyncio.create_task(self._trigger_tracking(task))
+                asyncio.create_task(self._trigger_tracking(task.task_id))
             elif task.tracking_data and task.tracking_data.get("is_signed") and not task.document_url:
                 # 有物流数据且已签收但没有文档，从文档生成开始
                 print(f"从文档生成步骤开始重试 - 任务: {task.task_id}")
-                asyncio.create_task(self._trigger_document_generation(task))
+                asyncio.create_task(self._trigger_document_generation(task.task_id))
             else:
                 # 从二维码识别开始重试
                 print(f"从二维码识别步骤开始重试 - 任务: {task.task_id}")
-                asyncio.create_task(self._trigger_qr_recognition(task))
+                asyncio.create_task(self._trigger_qr_recognition(task.task_id))
         except Exception as e:
             print(f"重试任务时启动后续流程失败: {str(e)}")
             # 如果启动后续流程失败，任务状态已经设为PENDING，用户可以手动重试
@@ -300,14 +301,17 @@ class TaskService:
         
         return stats
     
-    async def _trigger_qr_recognition(self, task: Task):
+    async def _trigger_qr_recognition(self, task_id: str):
         """触发二维码识别处理"""
         try:
-            # 重新获取task对象确保数据库会话有效
-            task = self.get_task_by_id(task.task_id)
+            # 获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task_id)
             if not task:
-                print(f"任务不存在 - {task.task_id}")
+                print(f"任务不存在 - {task_id}")
                 return
+            
+            # 刷新对象确保与数据库同步
+            self.db.refresh(task)
                 
             print(f"开始进行二维码识别 - 任务: {task.task_id}")
             
@@ -339,7 +343,7 @@ class TaskService:
                     self.db.commit()
                     
                     # 触发物流跟踪 - 异步执行
-                    asyncio.create_task(self._trigger_tracking(task))
+                    asyncio.create_task(self._trigger_tracking(task.task_id))
                 else:
                     # 识别到二维码但未提取到快递单号
                     task.status = TaskStatusEnum.FAILED
@@ -354,23 +358,42 @@ class TaskService:
             
             self.db.commit()
             
+        except DetachedInstanceError as e:
+            print(f"数据库会话错误 - 二维码识别: {str(e)}")
+            # 重新获取任务并更新状态
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"数据库会话错误: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
         except Exception as e:
             print(f"二维码识别处理失败: {str(e)}")
             import traceback
             traceback.print_exc()
             
-            task.status = TaskStatusEnum.FAILED
-            task.error_message = f"二维码识别失败: {str(e)}"
-            self.db.commit()
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"二维码识别失败: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
     
-    async def _trigger_tracking(self, task: Task):
+    async def _trigger_tracking(self, task_id: str):
         """触发物流跟踪处理"""
         try:
-            # 重新获取task对象确保数据库会话有效
-            task = self.get_task_by_id(task.task_id)
+            # 获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task_id)
             if not task:
-                print(f"任务不存在 - {task.task_id}")
+                print(f"任务不存在 - {task_id}")
                 return
+            
+            # 刷新对象确保与数据库同步
+            self.db.refresh(task)
                 
             print(f"开始物流查询 - 任务: {task.task_id}, 快递单号: {task.tracking_number}")
             
@@ -412,7 +435,7 @@ class TaskService:
                     self.db.commit()
                     
                     # 触发后续处理（生成截图、回证等）- 异步执行
-                    asyncio.create_task(self._trigger_document_generation(task))
+                    asyncio.create_task(self._trigger_document_generation(task.task_id))
                 else:
                     # 保持TRACKING状态，等待后续检查
                     print(f"快递尚未签收 - 任务: {task.task_id}, 当前状态: {task.delivery_status}")
@@ -427,24 +450,43 @@ class TaskService:
             
             self.db.commit()
             
+        except DetachedInstanceError as e:
+            print(f"数据库会话错误 - 物流查询: {str(e)}")
+            # 重新获取任务并更新状态
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"数据库会话错误: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
         except Exception as e:
             print(f"物流查询处理失败: {str(e)}")
             import traceback
             traceback.print_exc()
             
             # 严重错误才标记为失败
-            task.status = TaskStatusEnum.FAILED
-            task.error_message = f"物流查询严重错误: {str(e)}"
-            self.db.commit()
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"物流查询严重错误: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
     
-    async def _trigger_document_generation(self, task: Task):
+    async def _trigger_document_generation(self, task_id: str):
         """触发文档生成处理 - 按步骤顺序执行"""
         try:
-            # 重新获取task对象确保数据库会话有效
-            task = self.get_task_by_id(task.task_id)
+            # 获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task_id)
             if not task:
-                print(f"任务不存在 - {task.task_id}")
+                print(f"任务不存在 - {task_id}")
                 return
+            
+            # 刷新对象确保与数据库同步
+            self.db.refresh(task)
                 
             print(f"开始文档生成 - 任务: {task.task_id}")
             
@@ -503,14 +545,30 @@ class TaskService:
                 self.db.commit()
                 print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
+        except DetachedInstanceError as e:
+            print(f"数据库会话错误 - 文档生成: {str(e)}")
+            # 重新获取任务并更新状态
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"数据库会话错误: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
         except Exception as e:
             print(f"文档生成处理失败: {str(e)}")
             import traceback
             traceback.print_exc()
             
-            task.status = TaskStatusEnum.FAILED
-            task.error_message = f"文档生成失败: {str(e)}"
-            self.db.commit()
+            try:
+                task = self.get_task_by_id(task_id)
+                if task:
+                    task.status = TaskStatusEnum.FAILED
+                    task.error_message = f"文档生成失败: {str(e)}"
+                    self.db.commit()
+            except Exception as commit_error:
+                print(f"更新任务状态失败: {str(commit_error)}")
     
     async def _generate_tracking_screenshot(self, task: Task) -> bool:
         """生成物流轨迹截图"""

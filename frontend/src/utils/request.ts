@@ -4,8 +4,16 @@ import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
 
 // 创建axios实例
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+console.log('🚀 API Base URL:', apiBaseUrl)
+console.log('🔧 Environment variables:', {
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  MODE: import.meta.env.MODE,
+  DEV: import.meta.env.DEV
+})
+
 const service: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  baseURL: apiBaseUrl,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -21,6 +29,16 @@ service.interceptors.request.use(
     if (authStore.token) {
       config.headers.Authorization = `Bearer ${authStore.token}`
     }
+    
+    // 调试信息
+    console.log('📤 Request:', {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      headers: config.headers,
+      data: config.data
+    })
     
     return config
   },
@@ -44,7 +62,24 @@ service.interceptors.response.use(
     return res
   },
   (error: AxiosError) => {
-    console.error('Response error:', error)
+    console.error('📥 Response error:', error)
+    console.error('📥 Error details:', {
+      message: error.message,
+      code: error.code,
+      config: {
+        method: error.config?.method,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown'
+      },
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      } : null,
+      request: error.request ? 'Request was made but no response received' : null
+    })
     
     let message = '网络错误'
     
