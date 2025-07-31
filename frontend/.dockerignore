@@ -1,0 +1,39 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 开发工具
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 环境配置
+.env*
+
+# 构建产物（构建阶段会重新生成）
+dist/
+
+# 测试覆盖率
+coverage/
+
+# 其他
+.dockerignore
+README.md
