@@ -74,6 +74,60 @@ install_netcat() {
     return 0
 }
 
+# 安装zbar库（用于二维码识别）
+install_zbar() {
+    log_step "检查并安装zbar库..."
+    
+    # 检查是否已安装
+    if ldconfig -p | grep -q libzbar; then
+        log_info "zbar库已安装"
+        return 0
+    fi
+    
+    log_warn "zbar库未找到，开始安装..."
+    
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+    else
+        log_error "无法检测操作系统版本"
+        return 1
+    fi
+    
+    case $OS in
+        "ubuntu"|"debian")
+            sudo apt-get update -qq
+            sudo apt-get install -y libzbar0 libzbar-dev
+            ;;
+        "centos"|"rhel"|"fedora")
+            # CentOS/RHEL需要EPEL仓库
+            if [[ "$OS" == "centos" || "$OS" == "rhel" ]]; then
+                if ! rpm -q epel-release &> /dev/null; then
+                    log_info "安装EPEL仓库..."
+                    sudo yum install -y epel-release 2>/dev/null || sudo dnf install -y epel-release 2>/dev/null
+                fi
+            fi
+            sudo yum install -y zbar-devel 2>/dev/null || sudo dnf install -y zbar-devel 2>/dev/null
+            ;;
+        *)
+            log_error "无法自动安装zbar库，请手动安装："
+            log_info "Ubuntu/Debian: sudo apt-get install libzbar0 libzbar-dev"
+            log_info "CentOS/RHEL: sudo yum install zbar-devel"
+            return 1
+            ;;
+    esac
+    
+    # 验证安装
+    if ldconfig -p | grep -q libzbar; then
+        log_info "zbar库安装成功"
+    else
+        log_error "zbar库安装失败"
+        return 1
+    fi
+    
+    return 0
+}
+
 # 检查服务是否运行
 check_service() {
     local service_name=$1
@@ -242,6 +296,11 @@ check_dependencies() {
     
     # 安装netcat用于端口检查
     install_netcat
+    
+    # 安装zbar库用于二维码识别
+    if ! install_zbar; then
+        log_warn "zbar库安装失败，二维码识别功能可能无法使用"
+    fi
     
     # SQLite不需要服务检查，跳过数据库服务检查
     log_info "使用SQLite数据库，无需额外数据库服务"
