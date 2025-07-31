@@ -6,6 +6,7 @@ import mimetypes
 from app.core.database import get_db
 from app.services.task import TaskService
 from app.core.config import settings
+from app.models.task import TaskStatusEnum
 
 router = APIRouter()
 
@@ -84,6 +85,67 @@ async def upload_images_and_create_tasks(
     }
 
 
+@router.get("/{task_id}/status")
+async def get_task_status(
+    task_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    获取任务状态（轻量级，用于前端轮询）
+    """
+    service = TaskService(db)
+    task = service.get_task_by_id(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    # 计算处理进度
+    progress_percentage = 0
+    if task.status == TaskStatusEnum.PENDING:
+        progress_percentage = 10
+    elif task.status == TaskStatusEnum.RECOGNIZING:
+        progress_percentage = 30
+    elif task.status == TaskStatusEnum.TRACKING:
+        progress_percentage = 50
+    elif task.status == TaskStatusEnum.DELIVERED:
+        progress_percentage = 70
+    elif task.status == TaskStatusEnum.GENERATING:
+        progress_percentage = 90
+    elif task.status == TaskStatusEnum.COMPLETED:
+        progress_percentage = 100
+    elif task.status == TaskStatusEnum.FAILED:
+        progress_percentage = task.progress_percentage or 0
+    
+    # 状态描述
+    status_messages = {
+        "PENDING": "任务已创建，等待处理",
+        "RECOGNIZING": "正在识别二维码...",
+        "TRACKING": "正在查询物流信息...",
+        "DELIVERED": "快递已签收，正在生成文档...",
+        "GENERATING": "正在生成送达回证...",
+        "COMPLETED": "任务处理完成",
+        "FAILED": f"处理失败: {task.error_message}" if task.error_message else "处理失败"
+    }
+    
+    return {
+        "success": True,
+        "data": {
+            "task_id": task.task_id,
+            "status": task.status.value,
+            "status_message": status_messages.get(task.status.value, "未知状态"),
+            "progress": progress_percentage,
+            "is_processing": task.status.value in ["RECOGNIZING", "TRACKING", "GENERATING"],
+            "is_completed": task.status.value == "COMPLETED",
+            "has_error": task.status.value == "FAILED",
+            "error_message": task.error_message,
+            "tracking_number": task.tracking_number,
+            "courier_company": task.courier_company,
+            "document_url": task.document_url if task.status.value == "COMPLETED" else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+    }
+
+
 @router.get("/{task_id}")
 async def get_task_detail(
     task_id: str,
@@ -98,13 +160,42 @@ async def get_task_detail(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     
+    # 计算处理进度百分比
+    progress_percentage = 0
+    if task.status == TaskStatusEnum.PENDING:
+        progress_percentage = 10
+    elif task.status == TaskStatusEnum.RECOGNIZING:
+        progress_percentage = 30
+    elif task.status == TaskStatusEnum.TRACKING:
+        progress_percentage = 50
+    elif task.status == TaskStatusEnum.DELIVERED:
+        progress_percentage = 70
+    elif task.status == TaskStatusEnum.GENERATING:
+        progress_percentage = 90
+    elif task.status == TaskStatusEnum.COMPLETED:
+        progress_percentage = 100
+    elif task.status == TaskStatusEnum.FAILED:
+        progress_percentage = task.progress_percentage or 0
+    
+    # 生成状态描述
+    status_messages = {
+        "PENDING": "任务已创建，等待处理",
+        "RECOGNIZING": "正在识别二维码...",
+        "TRACKING": "正在查询物流信息...",
+        "DELIVERED": "快递已签收，正在生成文档...",
+        "GENERATING": "正在生成送达回证...",
+        "COMPLETED": "任务处理完成",
+        "FAILED": f"处理失败: {task.error_message}" if task.error_message else "处理失败"
+    }
+    
     return {
         "success": True,
         "data": {
             "task_id": task.task_id,
             "task_name": task.task_name,
             "status": task.status.value,
-            "progress": task.progress_percentage,
+            "status_message": status_messages.get(task.status.value, "未知状态"),
+            "progress": progress_percentage,
             "image_url": task.image_url,
             "qr_code": task.qr_code,
             "tracking_number": task.tracking_number,
@@ -119,7 +210,8 @@ async def get_task_detail(
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "processing_time": task.processing_time
+            "processing_time": task.processing_time,
+            "is_processing": task.status.value in ["RECOGNIZING", "TRACKING", "GENERATING"]
         }
     }
 

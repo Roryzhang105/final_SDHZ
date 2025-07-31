@@ -119,14 +119,6 @@ class DeliveryReceiptGeneratorService:
             生成结果
         """
         try:
-            # 添加参数接收日志
-            print(f"DEBUG: DeliveryReceiptGeneratorService.generate_delivery_receipt 接收到的参数:")
-            print(f"  - tracking_number: '{tracking_number}'")
-            print(f"  - doc_title: '{doc_title}'")
-            print(f"  - sender: '{sender}'")
-            print(f"  - send_time: '{send_time}'")
-            print(f"  - send_location: '{send_location}'")
-            print(f"  - receiver: '{receiver}'")
             # 1. 查找或创建送达回证记录
             receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
             if not receipt:
@@ -220,10 +212,6 @@ class DeliveryReceiptGeneratorService:
             receipt.delivery_receipt_doc_path = doc_result["doc_path"]
             self.db.commit()
             
-            print(f"DEBUG: 数据库记录更新完成:")
-            print(f"  - 旧文件路径: {old_path}")
-            print(f"  - 新文件路径: {receipt.delivery_receipt_doc_path}")
-            print(f"  - 记录ID: {receipt.id}")
             
             return {
                 "success": True,
@@ -368,6 +356,7 @@ class DeliveryReceiptGeneratorService:
                 cmd.extend(["--send-location", send_location])
             if receiver:
                 cmd.extend(["--receiver", receiver])
+            
             
             # 添加命令执行日志
             print(f"DEBUG: 执行Word生成命令:")

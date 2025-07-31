@@ -12,6 +12,8 @@
 - 📸 **自动截图功能** - 物流页面自动截图，支持多种快递网站
 - 📄 **文档模板处理** - 自动填充Word文档模板
 - 🗄️ **文件管理系统** - 完整的文件上传、存储和管理
+- ⚡ **智能任务系统** - 图片上传后自动识别、查询、生成文档的完整流程
+- 🔄 **异步处理优化** - 上传即时响应，后台异步处理，实时进度查询
 
 ### 技术特性
 - ⚡ **异步任务处理** - 基于Celery的后台任务队列
@@ -105,9 +107,10 @@ backend/
 │   ├── core/                       # 核心配置
 │   │   ├── config.py              # 配置管理
 │   │   └── database.py            # 数据库配置
-│   ├── models/                     # 数据模型 (270行)
+│   ├── models/                     # 数据模型 (350行)
 │   │   ├── base.py                # 基础模型
 │   │   ├── user.py                # 用户模型
+│   │   ├── task.py                # 任务模型 (新增)
 │   │   ├── delivery_receipt.py    # 送达回证模型
 │   │   ├── tracking.py            # 物流跟踪模型
 │   │   ├── recognition.py         # 识别结果模型
@@ -117,6 +120,7 @@ backend/
 │   │       ├── api.py             # 路由汇总
 │   │       └── endpoints/         # 具体端点
 │   │           ├── auth.py        # 认证相关
+│   │           ├── tasks.py       # 智能任务处理 (新增)
 │   │           ├── delivery_receipts.py  # 送达回证
 │   │           ├── tracking.py    # 物流跟踪
 │   │           ├── qr_generation.py      # 二维码生成
@@ -124,8 +128,9 @@ backend/
 │   │           ├── file_management.py    # 文件管理
 │   │           ├── upload.py      # 文件上传
 │   │           └── users.py       # 用户管理
-│   ├── services/                   # 业务逻辑层 (2860行)
+│   ├── services/                   # 业务逻辑层 (3200行)
 │   │   ├── auth.py                # 认证服务
+│   │   ├── task.py                # 智能任务服务 (新增，680行)
 │   │   ├── delivery_receipt.py    # 送达回证业务逻辑
 │   │   ├── delivery_receipt_generator.py  # 回证生成器
 │   │   ├── express_tracking.py    # 快递跟踪服务
@@ -166,13 +171,22 @@ backend/
 └── delivery_receipt.db            # SQLite数据库文件
 ```
 
-**代码统计**: 总计 **3979行** Python代码
+**代码统计**: 总计 **4680行** Python代码（包含新增的智能任务系统）
 
 ## 🔌 主要API端点
 
 ### 认证模块
 - `POST /api/v1/auth/login` - 用户登录
 - `POST /api/v1/auth/register` - 用户注册
+
+### 智能任务系统 (新增核心功能)
+- `POST /api/v1/tasks/upload` - **图片上传并自动处理** (一键完成整个流程)
+- `GET /api/v1/tasks/{task_id}/status` - 获取任务实时状态和进度
+- `GET /api/v1/tasks/{task_id}` - 获取任务详细信息
+- `GET /api/v1/tasks/` - 获取任务列表
+- `PUT /api/v1/tasks/{task_id}` - 更新任务信息
+- `POST /api/v1/tasks/{task_id}/retry` - 重试失败的任务
+- `DELETE /api/v1/tasks/{task_id}` - 删除任务
 
 ### 送达回证模块
 - `POST /api/v1/delivery-receipts/generate` - **生成送达回证** (核心功能)
@@ -199,6 +213,39 @@ backend/
 - `DELETE /api/v1/files/{file_id}` - 删除文件
 
 ## ⚙️ 核心功能详解
+
+### 0. 智能任务系统 (⭐ 核心特性)
+
+**一键式自动化处理流程**:
+1. **图片上传** - 用户上传快递单照片，立即返回任务ID
+2. **自动识别** - 后台异步识别二维码，提取快递单号和快递公司
+3. **物流查询** - 自动查询物流信息，判断签收状态
+4. **截图生成** - 自动截取物流轨迹页面
+5. **二维码生成** - 生成快递单号对应的二维码和条形码
+6. **文档生成** - 自动填充Word模板，生成完整的送达回证
+7. **实时反馈** - 前端可实时查询处理进度和状态
+
+**异步优化特性**:
+- 上传后立即响应（1-2秒），无需等待整个流程完成
+- 后台异步处理，支持高并发
+- 实时进度查询，用户体验友好
+- 失败任务可重试，保证成功率
+
+**使用示例**:
+```bash
+# 1. 上传图片启动任务 (立即响应)
+curl -X POST "http://localhost:8000/api/v1/tasks/upload" \
+  -F "file=@photo.jpg"
+# 返回: {"success": true, "data": {"task_id": "task_abc123", "status": "PENDING"}}
+
+# 2. 轮询查询处理进度
+curl "http://localhost:8000/api/v1/tasks/task_abc123/status"
+# 返回: {"progress": 70, "status": "GENERATING", "status_message": "正在生成送达回证..."}
+
+# 3. 获取最终结果
+curl "http://localhost:8000/api/v1/tasks/task_abc123"
+# 包含完整的任务信息和生成的文件链接
+```
 
 ### 1. 送达回证自动生成
 

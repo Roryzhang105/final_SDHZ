@@ -51,26 +51,17 @@ def write_centered_text(cell, text: str):
 
 def fill_cell_by_label(table, label: str, value: str):
     """在表格中找到包含 label 的单元格，把 value 写到其右侧格"""
-    print(f"DEBUG: 查找标签 '{label}', 要填充的值: '{value}'")
     
     if value is None:
         print(f"DEBUG: 值为None，跳过填充标签 '{label}'")
         return  # 未提供则跳过
 
-    # 先打印所有单元格的内容，帮助调试
-    print(f"DEBUG: 表格中所有单元格内容:")
-    for row_idx, row in enumerate(table.rows):
-        for cell_idx, cell in enumerate(row.cells):
-            cell_text = cell.text.strip()
-            if cell_text:  # 只打印非空单元格
-                print(f"  - 行{row_idx}列{cell_idx}: '{cell_text}'")
 
     for row in table.rows:
         for idx, cell in enumerate(row.cells):
             if label in cell.text.strip():
                 # 优先选右侧格；若已是行尾则写自身
                 target = row.cells[idx + 1] if idx + 1 < len(row.cells) else cell
-                print(f"DEBUG: 找到标签 '{label}' 在单元格 '{cell.text.strip()}'，将在目标单元格填充: '{value}'")
                 write_centered_text(target, value)
                 return
     
@@ -108,7 +99,6 @@ def process_document(
                 # 找到包含相关关键词的单元格，在其右侧填充标题
                 if idx + 1 < len(row.cells):
                     write_centered_text(row.cells[idx + 1], doc_title)
-                    print(f"DEBUG: 已在'{cell.text.strip()}'右侧填充文档标题: '{doc_title}'")
                     title_filled = True
                     break
         if title_filled:
@@ -116,14 +106,12 @@ def process_document(
     
     # 如果上述方法未成功，尝试更宽松的匹配
     if not title_filled:
-        print("DEBUG: 尝试宽松匹配模式")
         for row in table.rows:
             for idx, cell in enumerate(row.cells):
                 if "送达文书" in cell.text:
                     # 只要包含"送达文书"就尝试填充
                     if idx + 1 < len(row.cells):
                         write_centered_text(row.cells[idx + 1], doc_title)
-                        print(f"DEBUG: 宽松匹配 - 已在'{cell.text.strip()}'右侧填充文档标题: '{doc_title}'")
                         title_filled = True
                         break
             if title_filled:

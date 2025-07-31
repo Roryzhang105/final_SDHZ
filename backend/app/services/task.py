@@ -59,8 +59,8 @@ class TaskService:
             
             print(f"任务保存成功到数据库: id={task.id}, task_id={task.task_id}")
             
-            # 3. 自动进行二维码识别
-            await self._trigger_qr_recognition(task)
+            # 3. 启动异步二维码识别（不等待完成）
+            asyncio.create_task(self._trigger_qr_recognition(task))
             
             return {
                 "success": True,
@@ -185,13 +185,13 @@ class TaskService:
                     self.db.commit()
                     
                     print(f"更新任务状态为已签收 - 任务: {task.task_id}")
-                    await self._trigger_document_generation(task)
+                    asyncio.create_task(self._trigger_document_generation(task))
                     return True
             
             # 如果任务处于DELIVERED状态但没有文档，触发文档生成
             elif task.status == TaskStatusEnum.DELIVERED and not task.document_url:
                 print(f"重新触发文档生成 - 任务: {task.task_id}")
-                await self._trigger_document_generation(task)
+                asyncio.create_task(self._trigger_document_generation(task))
                 return True
             
             return False
@@ -303,6 +303,12 @@ class TaskService:
     async def _trigger_qr_recognition(self, task: Task):
         """触发二维码识别处理"""
         try:
+            # 重新获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task.task_id)
+            if not task:
+                print(f"任务不存在 - {task.task_id}")
+                return
+                
             print(f"开始进行二维码识别 - 任务: {task.task_id}")
             
             # 更新任务状态为识别中
@@ -332,8 +338,8 @@ class TaskService:
                     # 先提交识别结果
                     self.db.commit()
                     
-                    # 触发物流跟踪
-                    await self._trigger_tracking(task)
+                    # 触发物流跟踪 - 异步执行
+                    asyncio.create_task(self._trigger_tracking(task))
                 else:
                     # 识别到二维码但未提取到快递单号
                     task.status = TaskStatusEnum.FAILED
@@ -360,6 +366,12 @@ class TaskService:
     async def _trigger_tracking(self, task: Task):
         """触发物流跟踪处理"""
         try:
+            # 重新获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task.task_id)
+            if not task:
+                print(f"任务不存在 - {task.task_id}")
+                return
+                
             print(f"开始物流查询 - 任务: {task.task_id}, 快递单号: {task.tracking_number}")
             
             # 更新任务状态为物流跟踪中
@@ -399,8 +411,8 @@ class TaskService:
                     # 立即提交状态更新
                     self.db.commit()
                     
-                    # 触发后续处理（生成截图、回证等）
-                    await self._trigger_document_generation(task)
+                    # 触发后续处理（生成截图、回证等）- 异步执行
+                    asyncio.create_task(self._trigger_document_generation(task))
                 else:
                     # 保持TRACKING状态，等待后续检查
                     print(f"快递尚未签收 - 任务: {task.task_id}, 当前状态: {task.delivery_status}")
@@ -428,6 +440,12 @@ class TaskService:
     async def _trigger_document_generation(self, task: Task):
         """触发文档生成处理 - 按步骤顺序执行"""
         try:
+            # 重新获取task对象确保数据库会话有效
+            task = self.get_task_by_id(task.task_id)
+            if not task:
+                print(f"任务不存在 - {task.task_id}")
+                return
+                
             print(f"开始文档生成 - 任务: {task.task_id}")
             
             # 更新任务状态为生成中
@@ -455,7 +473,10 @@ class TaskService:
                     task.completed_at = datetime.now()
                     if task.started_at:
                         task.processing_time = (task.completed_at - task.started_at).total_seconds()
-                    print(f"文档生成完成 - 任务: {task.task_id}")
+                    
+                    # 立即提交状态更新
+                    self.db.commit()
+                    print(f"✓ 任务完成并提交到数据库 - 任务: {task.task_id}, 状态: {task.status.value}")
                 else:
                     # 最终文档生成失败，但保留已生成的文件信息
                     task.status = TaskStatusEnum.FAILED
@@ -477,7 +498,10 @@ class TaskService:
                 task.error_message = "物流截图和二维码标签生成均失败"
                 print(f"所有文件生成步骤都失败 - 任务: {task.task_id}")
             
-            self.db.commit()
+            # 如果状态还没有被设置为COMPLETED，则需要提交其他状态
+            if task.status != TaskStatusEnum.COMPLETED:
+                self.db.commit()
+                print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
         except Exception as e:
             print(f"文档生成处理失败: {str(e)}")
@@ -505,6 +529,9 @@ class TaskService:
                     import os
                     filename = os.path.basename(screenshot_path)
                     task.screenshot_url = f"/static/tracking_screenshots/{filename}"
+                    
+                    # 立即保存到数据库
+                    self.db.commit()
                     print(f"物流截图生成成功: {task.screenshot_url}")
                     return True
                 elif screenshot_result.get("html_fallback_path"):
@@ -512,6 +539,9 @@ class TaskService:
                     task.screenshot_path = screenshot_result.get("html_fallback_path")
                     filename = os.path.basename(task.screenshot_path)
                     task.screenshot_url = f"/static/tracking_html/{filename}"
+                    
+                    # 立即保存到数据库
+                    self.db.commit()
                     print(f"物流HTML文件生成成功: {task.screenshot_url}")
                     return True
             else:
@@ -546,6 +576,9 @@ class TaskService:
                     import os
                     filename = os.path.basename(final_label_path)
                     task.extra_metadata["qr_label_url"] = f"/static/uploads/{filename}"
+                    
+                    # 立即保存到数据库
+                    self.db.commit()
                     print(f"二维码标签生成成功: {task.extra_metadata['qr_label_url']}")
                     return True
             else:
@@ -602,6 +635,9 @@ class TaskService:
                     import os
                     filename = os.path.basename(task.document_path)
                     task.document_url = f"/static/documents/{filename}"
+                    
+                    # 立即保存到数据库
+                    self.db.commit()
                     print(f"送达回证生成成功: {task.document_url}")
                     return True
             else:
