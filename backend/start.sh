@@ -37,6 +37,43 @@ check_command() {
     return 0
 }
 
+# 安装netcat
+install_netcat() {
+    if ! command -v nc &> /dev/null; then
+        log_warn "nc (netcat) 未找到，开始安装..."
+        
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            OS=$ID
+        else
+            log_error "无法检测操作系统版本"
+            return 1
+        fi
+        
+        case $OS in
+            "ubuntu"|"debian")
+                sudo apt-get update -qq
+                sudo apt-get install -y netcat-openbsd
+                ;;
+            "centos"|"rhel"|"fedora")
+                sudo yum install -y nc 2>/dev/null || sudo dnf install -y nc 2>/dev/null
+                ;;
+            *)
+                log_error "无法自动安装netcat，请手动安装"
+                return 1
+                ;;
+        esac
+        
+        if command -v nc &> /dev/null; then
+            log_info "netcat 安装成功"
+        else
+            log_error "netcat 安装失败"
+            return 1
+        fi
+    fi
+    return 0
+}
+
 # 检查服务是否运行
 check_service() {
     local service_name=$1
@@ -193,25 +230,34 @@ check_dependencies() {
     
     # 检查Python
     if ! check_command python3; then
+        log_error "请先安装Python3"
         exit 1
     fi
     
     # 检查pip
     if ! check_command pip3; then
+        log_error "请先安装pip3"
         exit 1
     fi
     
+    # 安装netcat用于端口检查
+    install_netcat
+    
     # SQLite不需要服务检查，跳过数据库服务检查
-    log_info "使用SQLite数据库，无需额外服务"
+    log_info "使用SQLite数据库，无需额外数据库服务"
     
     # 检查并安装Chrome
-    install_chrome
+    if ! install_chrome; then
+        log_warn "Chrome安装失败，某些功能可能无法使用"
+    fi
     
     # 检查Redis
     if ! check_service "Redis" 6379; then
         log_warn "Redis未运行，请启动Redis服务"
-        log_info "Ubuntu/Debian: sudo systemctl start redis"
+        log_info "Ubuntu/Debian: sudo systemctl start redis-server"
+        log_info "CentOS/RHEL: sudo systemctl start redis"
         log_info "macOS: brew services start redis"
+        log_info "Docker: docker run -d -p 6379:6379 redis:alpine"
         read -p "Redis已启动，按Enter继续..."
     fi
 }
@@ -280,9 +326,14 @@ main() {
     
     # 检查环境变量文件
     if [ ! -f ".env" ]; then
-        log_error ".env 文件不存在，请先配置环境变量"
-        log_info "可以复制 .env.example 并修改配置"
-        exit 1
+        log_warn ".env 文件不存在，从模板创建..."
+        if [ -f ".env.example" ]; then
+            cp .env.example .env
+            log_info ".env 文件已从模板创建，请根据需要修改配置"
+        else
+            log_error ".env.example 文件不存在，无法自动创建配置"
+            exit 1
+        fi
     fi
     
     # 检查依赖
