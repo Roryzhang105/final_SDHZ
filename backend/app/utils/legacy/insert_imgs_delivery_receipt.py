@@ -51,17 +51,32 @@ def write_centered_text(cell, text: str):
 
 def fill_cell_by_label(table, label: str, value: str):
     """在表格中找到包含 label 的单元格，把 value 写到其右侧格"""
+    print(f"DEBUG: 查找标签 '{label}', 要填充的值: '{value}'")
+    
     if value is None:
+        print(f"DEBUG: 值为None，跳过填充标签 '{label}'")
         return  # 未提供则跳过
+
+    # 先打印所有单元格的内容，帮助调试
+    print(f"DEBUG: 表格中所有单元格内容:")
+    for row_idx, row in enumerate(table.rows):
+        for cell_idx, cell in enumerate(row.cells):
+            cell_text = cell.text.strip()
+            if cell_text:  # 只打印非空单元格
+                print(f"  - 行{row_idx}列{cell_idx}: '{cell_text}'")
 
     for row in table.rows:
         for idx, cell in enumerate(row.cells):
             if label in cell.text.strip():
                 # 优先选右侧格；若已是行尾则写自身
                 target = row.cells[idx + 1] if idx + 1 < len(row.cells) else cell
+                print(f"DEBUG: 找到标签 '{label}' 在单元格 '{cell.text.strip()}'，将在目标单元格填充: '{value}'")
                 write_centered_text(target, value)
                 return
-    raise RuntimeError(f"未找到包含“{label}”的单元格")
+    
+    print(f"DEBUG: 警告 - 未找到包含'{label}'的单元格")
+    # 改为警告而不是抛出异常，避免因为找不到某个标签就中断整个流程
+    # raise RuntimeError(f"未找到包含"{label}"的单元格")
 
 
 # ────────────────── 主逻辑 ──────────────────
@@ -83,14 +98,39 @@ def process_document(
     table = doc.tables[0]
 
     # 1) 送达文书 名称及文号
-    fill_cell_by_label(table, "送达文书", "")  # 定位用
-    fill_cell_by_label(table, "名称及文号", "")  # 防止分行情况
-    # 实际写入
+    # 改进的标题填充逻辑，支持分行情况
+    title_filled = False
     for row in table.rows:
         for idx, cell in enumerate(row.cells):
-            if "送达文书" in cell.text:
-                write_centered_text(row.cells[idx + 1], doc_title)
+            cell_text = cell.text.replace('\n', '').replace(' ', '')  # 移除换行和空格
+            # 检查是否包含"送达文书"关键词（支持分行情况）
+            if "送达文书" in cell_text and ("名称" in cell_text or "文号" in cell_text):
+                # 找到包含相关关键词的单元格，在其右侧填充标题
+                if idx + 1 < len(row.cells):
+                    write_centered_text(row.cells[idx + 1], doc_title)
+                    print(f"DEBUG: 已在'{cell.text.strip()}'右侧填充文档标题: '{doc_title}'")
+                    title_filled = True
+                    break
+        if title_filled:
+            break
+    
+    # 如果上述方法未成功，尝试更宽松的匹配
+    if not title_filled:
+        print("DEBUG: 尝试宽松匹配模式")
+        for row in table.rows:
+            for idx, cell in enumerate(row.cells):
+                if "送达文书" in cell.text:
+                    # 只要包含"送达文书"就尝试填充
+                    if idx + 1 < len(row.cells):
+                        write_centered_text(row.cells[idx + 1], doc_title)
+                        print(f"DEBUG: 宽松匹配 - 已在'{cell.text.strip()}'右侧填充文档标题: '{doc_title}'")
+                        title_filled = True
+                        break
+            if title_filled:
                 break
+    
+    if not title_filled:
+        print(f"WARNING: 未能找到合适的位置填充文档标题: '{doc_title}'")
 
     # 2) 其它可选字段
     fill_cell_by_label(table, "送达人", sender)
@@ -132,6 +172,18 @@ def main():
     ap.add_argument("--max-width", type=float, default=2.8, help="图片最大宽度(inch)")
 
     args = ap.parse_args()
+    
+    # 添加参数接收日志
+    print(f"DEBUG: Word生成脚本接收到的参数:")
+    print(f"  - template: {args.template}")
+    print(f"  - output: {args.output}")
+    print(f"  - doc_title: '{args.doc_title}'")
+    print(f"  - sender: '{args.sender}'")
+    print(f"  - send_time: '{args.send_time}'")
+    print(f"  - send_location: '{args.send_location}'")
+    print(f"  - receiver: '{args.receiver}'")
+    print(f"  - note_img: {args.note_img}")
+    print(f"  - footer_img: {args.footer_img}")
 
     process_document(
         template_doc=Path(args.template),

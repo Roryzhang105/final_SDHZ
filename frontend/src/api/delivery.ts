@@ -36,9 +36,34 @@ export const deliveryApi = {
   },
 
   // 下载送达回证文档（通过快递单号）
-  downloadByTrackingNumber(trackingNumber: string): Promise<Blob> {
+  downloadByTrackingNumber(trackingNumber: string): Promise<{ blob: Blob, filename: string }> {
     return request.get(`/api/v1/delivery-receipts/${trackingNumber}/download`, {
       responseType: 'blob'
+    }).then((response: any) => {
+      let filename = `delivery_receipt_${trackingNumber}.docx` // 默认文件名
+      
+      try {
+        // 尝试从响应头获取文件名
+        const headers = response.headers || {}
+        const contentDisposition = headers['content-disposition'] || headers['Content-Disposition']
+        
+        if (contentDisposition && typeof contentDisposition === 'string') {
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, '').trim()
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to extract filename from response headers:', error)
+      }
+      
+      return {
+        blob: response.data || response,
+        filename
+      }
+    }).catch((error) => {
+      console.error('Download API error:', error)
+      throw error
     })
   },
 
@@ -64,5 +89,22 @@ export const deliveryApi = {
         'Content-Type': 'multipart/form-data'
       }
     })
+  },
+
+  // 更新送达回证信息
+  updateInfo(trackingNumber: string, data: {
+    doc_title?: string;
+    sender?: string;
+    send_time?: string;
+    send_location?: string;
+    receiver?: string;
+    remarks?: string;
+  }): Promise<ApiResponse<any>> {
+    return request.put(`/api/v1/delivery-receipts/tracking/${trackingNumber}/info`, data)
+  },
+
+  // 手动重新生成送达回证
+  regenerate(trackingNumber: string): Promise<ApiResponse<any>> {
+    return request.post(`/api/v1/delivery-receipts/tracking/${trackingNumber}/regenerate`)
   }
 }

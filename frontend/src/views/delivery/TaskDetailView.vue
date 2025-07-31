@@ -344,24 +344,31 @@
                 </div>
               </div>
               <div class="file-actions">
+                <!-- 有文档时显示下载按钮 -->
                 <el-button
-                  v-if="taskInfo.status === 'completed' && taskInfo.document_url"
+                  v-if="hasExistingDocument"
                   type="success"
                   :icon="Download"
                   @click="handleDownload('document')"
                 >
                   下载
                 </el-button>
+                
+                <!-- 可以生成时显示生成/重新生成按钮 -->
                 <el-button
-                  v-else-if="canGenerateManually"
-                  type="warning"
+                  v-if="canGenerateManually"
+                  :type="hasExistingDocument ? 'warning' : 'primary'"
                   :icon="DocumentAdd"
                   :loading="generating"
                   @click="handleManualGenerate"
                 >
-                  手动生成
+                  {{ hasExistingDocument ? '重新生成' : '生成文档' }}
                 </el-button>
-                <el-tag v-else type="info">未生成</el-tag>
+                
+                <!-- 其他状态显示标签 -->
+                <el-tag v-if="!hasExistingDocument && !canGenerateManually" type="info">
+                  未生成
+                </el-tag>
               </div>
             </div>
 
@@ -442,16 +449,6 @@
         返回列表
       </el-button>
       
-      <el-button 
-        v-if="canGenerateManually"
-        type="warning" 
-        size="large"
-        :loading="generating"
-        @click="handleManualGenerate"
-      >
-        <el-icon><DocumentAdd /></el-icon>
-        手动生成回证
-      </el-button>
 
       <el-button 
         v-if="taskInfo.status === 'failed'"
@@ -495,9 +492,12 @@ import {
   Refresh
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
+import { deliveryApi } from '@/api/delivery'
+import { useDeliveryStore } from '@/stores/delivery'
 
 const route = useRoute()
 const router = useRouter()
+const deliveryStore = useDeliveryStore()
 
 // 响应式数据
 const taskInfo = ref({
@@ -550,7 +550,14 @@ const statusMap = {
 
 // 计算属性
 const canGenerateManually = computed(() => {
-  return taskInfo.value.status === 'delivered' && !taskInfo.value.document_url
+  // 只要有快递单号且任务不是处理中状态，就可以手动生成
+  return taskInfo.value.tracking_number && 
+         !['pending', 'recognizing', 'tracking', 'generating'].includes(taskInfo.value.status)
+})
+
+// 检查是否有现有文档
+const hasExistingDocument = computed(() => {
+  return !!taskInfo.value.document_url
 })
 
 // 获取状态类型
@@ -660,15 +667,56 @@ const fetchTaskDetail = async (taskId: string) => {
     if (response.success) {
       taskInfo.value = response.data
       
-      // 设置表单数据的默认值
-      Object.assign(formData, {
-        doc_title: '送达回证',
-        sender: '',
-        send_location: '',
-        receiver: '',
-        send_time: '',
-        remarks: ''
-      })
+      // 尝试获取已保存的回证信息
+      if (taskInfo.value.tracking_number) {
+        try {
+          const receiptResponse = await deliveryApi.getByTrackingNumber(taskInfo.value.tracking_number)
+          
+          if (receiptResponse.success && receiptResponse.data.receipt_info) {
+            const receiptInfo = receiptResponse.data.receipt_info
+            // 使用已保存的数据填充表单
+            Object.assign(formData, {
+              doc_title: receiptInfo.doc_title || '送达回证',
+              sender: receiptInfo.sender || '',
+              send_location: receiptInfo.send_location || '',
+              receiver: receiptInfo.receiver || '',
+              send_time: receiptInfo.send_time || '',
+              remarks: receiptInfo.remarks || ''
+            })
+          } else {
+            // 使用默认值
+            Object.assign(formData, {
+              doc_title: '送达回证',
+              sender: '',
+              send_location: '',
+              receiver: '',
+              send_time: '',
+              remarks: ''
+            })
+          }
+        } catch (receiptError) {
+          console.log('获取回证信息失败，使用默认值:', receiptError)
+          // 使用默认值
+          Object.assign(formData, {
+            doc_title: '送达回证',
+            sender: '',
+            send_location: '',
+            receiver: '',
+            send_time: '',
+            remarks: ''
+          })
+        }
+      } else {
+        // 设置表单数据的默认值
+        Object.assign(formData, {
+          doc_title: '送达回证',
+          sender: '',
+          send_location: '',
+          receiver: '',
+          send_time: '',
+          remarks: ''
+        })
+      }
       
       // 物流信息暂时为空，等待实现真实的物流查询
       trackingInfo.value = null
@@ -696,29 +744,46 @@ const handleSaveForm = async () => {
     await formRef.value.validate()
     saving.value = true
     
-    // 模拟保存API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用真实的保存API
+    const response = await deliveryApi.updateInfo(taskInfo.value.tracking_number, {
+      doc_title: formData.doc_title,
+      sender: formData.sender,
+      send_time: formData.send_time,
+      send_location: formData.send_location,
+      receiver: formData.receiver,
+      remarks: formData.remarks
+    })
     
-    ElMessage.success('信息保存成功')
-    isEditing.value = false
+    if (response.success) {
+      ElMessage.success('信息保存成功')
+      isEditing.value = false
+    } else {
+      throw new Error(response.message || '保存失败')
+    }
   } catch (error) {
     console.error('保存失败:', error)
+    if (error.response?.data?.detail) {
+      ElMessage.error(`保存失败: ${error.response.data.detail}`)
+    } else {
+      ElMessage.error('保存失败，请重试')
+    }
   } finally {
     saving.value = false
   }
 }
 
 // 取消编辑
-const handleCancelEdit = () => {
+const handleCancelEdit = async () => {
   isEditing.value = false
-  // 重置表单数据
+  // 重新获取数据以重置表单
+  await fetchTaskDetail(taskInfo.value.task_id)
 }
 
 // 手动生成回证
 const handleManualGenerate = async () => {
   try {
     await ElMessageBox.confirm(
-      '确定要手动生成送达回证吗？',
+      '确定要手动生成送达回证吗？这将重新生成文档并替换现有文件。',
       '确认操作',
       {
         confirmButtonText: '确定',
@@ -729,17 +794,29 @@ const handleManualGenerate = async () => {
     
     generating.value = true
     
-    // 模拟生成API调用
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // 调用真实的重新生成API
+    const response = await deliveryApi.regenerate(taskInfo.value.tracking_number)
     
-    taskInfo.value.status = 'completed'
-    taskInfo.value.document_url = '/documents/receipt.docx'
-    
-    ElMessage.success('回证生成成功！')
+    if (response.success) {
+      ElMessage.success('送达回证重新生成成功！')
+      
+      // 更新任务信息
+      taskInfo.value.status = 'completed'
+      taskInfo.value.document_url = `/static/documents/${response.data.doc_filename}`
+      
+      // 重新获取任务详情以确保数据一致
+      await fetchTaskDetail(taskInfo.value.task_id)
+    } else {
+      throw new Error(response.message || '生成失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('生成失败:', error)
-      ElMessage.error('生成失败，请重试')
+      if (error.response?.data?.detail) {
+        ElMessage.error(`生成失败: ${error.response.data.detail}`)
+      } else {
+        ElMessage.error('生成失败，请重试')
+      }
     }
   } finally {
     generating.value = false
@@ -749,8 +826,13 @@ const handleManualGenerate = async () => {
 // 下载文件
 const handleDownload = async (type: 'document' | 'screenshot' | 'image' | 'qr_label') => {
   try {
+    // Word文档通过API下载，其他文件直接下载
+    if (type === 'document') {
+      await handleDownloadDocument()
+      return
+    }
+    
     const fileMap = {
-      document: { url: taskInfo.value.document_url, name: `送达回证_${taskInfo.value.tracking_number}.docx` },
       screenshot: { url: taskInfo.value.screenshot_url, name: `物流截图_${taskInfo.value.tracking_number}.png` },
       image: { url: taskInfo.value.image_url, name: `原图_${taskInfo.value.task_id}.jpg` },
       qr_label: { url: taskInfo.value.extra_metadata?.qr_label_url, name: `二维码标签_${taskInfo.value.tracking_number}.png` }
@@ -779,6 +861,25 @@ const handleDownload = async (type: 'document' | 'screenshot' | 'image' | 'qr_la
   } catch (error) {
     console.error('下载失败:', error)
     ElMessage.error('下载失败')
+  }
+}
+
+// 通过API下载Word文档
+const handleDownloadDocument = async () => {
+  try {
+    const trackingNumber = taskInfo.value?.tracking_number
+    if (!trackingNumber) {
+      ElMessage.error('找不到快递单号')
+      return
+    }
+    
+    // 调用store中的下载方法
+    await deliveryStore.downloadReceipt(trackingNumber)
+    ElMessage.success('送达回证下载成功')
+    
+  } catch (error) {
+    console.error('下载送达回证失败:', error)
+    ElMessage.error('下载送达回证失败')
   }
 }
 
@@ -1062,6 +1163,7 @@ onUnmounted(() => {
   color: #909399;
   margin-top: 5px;
 }
+
 
 .download-list {
   display: flex;

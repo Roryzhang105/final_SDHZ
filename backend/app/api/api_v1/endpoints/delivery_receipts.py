@@ -19,6 +19,15 @@ class DeliveryReceiptGenerateRequest(BaseModel):
     send_location: Optional[str] = None
     receiver: Optional[str] = None
 
+
+class DeliveryReceiptUpdateRequest(BaseModel):
+    doc_title: str = "送达回证"
+    sender: Optional[str] = None
+    send_time: Optional[str] = None
+    send_location: Optional[str] = None
+    receiver: Optional[str] = None
+    remarks: Optional[str] = None
+
 router = APIRouter()
 
 
@@ -204,6 +213,155 @@ async def update_receipt_status(
     return {"message": "状态更新成功"}
 
 
+@router.put("/tracking/{tracking_number}/info")
+async def update_delivery_receipt_info(
+    tracking_number: str,
+    request: DeliveryReceiptUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    更新送达回证信息
+    
+    Args:
+        tracking_number: 快递单号
+        request: 更新请求参数
+        db: 数据库会话
+    
+    Returns:
+        更新结果
+    """
+    try:
+        print(f"DEBUG: 更新回证信息 - 快递单号: {tracking_number}")
+        print(f"DEBUG: 接收到的更新数据:")
+        print(f"  - doc_title: '{request.doc_title}'")
+        print(f"  - sender: '{request.sender}'")
+        print(f"  - send_time: '{request.send_time}'")
+        print(f"  - send_location: '{request.send_location}'")
+        print(f"  - receiver: '{request.receiver}'")
+        print(f"  - remarks: '{request.remarks}'")
+        
+        service = DeliveryReceiptService(db)
+        receipt = service.get_delivery_receipt_by_tracking(tracking_number)
+        
+        if not receipt:
+            # 如果不存在，创建新记录
+            print(f"DEBUG: 创建新的回证记录")
+            from app.models.delivery_receipt import DeliveryReceipt
+            receipt = DeliveryReceipt(
+                tracking_number=tracking_number,
+                doc_title=request.doc_title,
+                sender=request.sender,
+                send_time=request.send_time,
+                send_location=request.send_location,
+                receiver=request.receiver
+            )
+            db.add(receipt)
+        else:
+            # 更新现有记录
+            print(f"DEBUG: 更新现有回证记录 ID: {receipt.id}")
+            receipt.doc_title = request.doc_title
+            receipt.sender = request.sender
+            receipt.send_time = request.send_time
+            receipt.send_location = request.send_location
+            receipt.receiver = request.receiver
+        
+        db.commit()
+        db.refresh(receipt)
+        
+        print(f"DEBUG: 保存后的回证记录:")
+        print(f"  - ID: {receipt.id}")
+        print(f"  - doc_title: '{receipt.doc_title}'")
+        print(f"  - sender: '{receipt.sender}'")
+        print(f"  - send_time: '{receipt.send_time}'")
+        print(f"  - send_location: '{receipt.send_location}'")
+        print(f"  - receiver: '{receipt.receiver}'")
+        
+        return {
+            "success": True,
+            "message": "回证信息更新成功",
+            "data": {
+                "id": receipt.id,
+                "tracking_number": receipt.tracking_number,
+                "doc_title": receipt.doc_title,
+                "sender": receipt.sender,
+                "send_time": receipt.send_time,
+                "send_location": receipt.send_location,
+                "receiver": receipt.receiver
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"更新回证信息失败: {str(e)}")
+
+
+@router.post("/tracking/{tracking_number}/regenerate")
+async def regenerate_delivery_receipt(
+    tracking_number: str,
+    db: Session = Depends(get_db)
+):
+    """
+    手动重新生成送达回证
+    
+    Args:
+        tracking_number: 快递单号
+        db: 数据库会话
+    
+    Returns:
+        生成结果
+    """
+    try:
+        service = DeliveryReceiptService(db)
+        receipt = service.get_delivery_receipt_by_tracking(tracking_number)
+        
+        if not receipt:
+            raise HTTPException(
+                status_code=404,
+                detail=f"未找到快递单号 {tracking_number} 的回证记录，请先保存回证信息"
+            )
+        
+        # 添加详细的调试日志
+        print(f"DEBUG: 手动重新生成 - 快递单号: {tracking_number}")
+        print(f"DEBUG: 获取到的回证记录 ID: {receipt.id}")
+        print(f"DEBUG: 回证信息详情:")
+        print(f"  - doc_title: '{receipt.doc_title}'")
+        print(f"  - sender: '{receipt.sender}'")
+        print(f"  - send_time: '{receipt.send_time}'")
+        print(f"  - send_location: '{receipt.send_location}'")
+        print(f"  - receiver: '{receipt.receiver}'")
+        
+        # 调用成器服务重新生成
+        generator_service = DeliveryReceiptGeneratorService(db)
+        result = generator_service.generate_delivery_receipt(
+            tracking_number=tracking_number,
+            doc_title=receipt.doc_title,
+            sender=receipt.sender,
+            send_time=receipt.send_time,
+            send_location=receipt.send_location,
+            receiver=receipt.receiver
+        )
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": "送达回证重新生成成功",
+                "data": {
+                    "tracking_number": result["tracking_number"],
+                    "receipt_id": result["receipt_id"],
+                    "doc_filename": result["doc_filename"],
+                    "file_size": result["file_size"],
+                    "download_url": f"/api/v1/delivery-receipts/{tracking_number}/download"
+                }
+            }
+        else:
+            raise HTTPException(status_code=400, detail=result["error"])
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重新生成送达回证失败: {str(e)}")
+
+
 @router.get("/{tracking_number}/download")
 async def download_delivery_receipt(
     tracking_number: str,
@@ -247,12 +405,12 @@ async def download_delivery_receipt(
         if not os.path.abspath(receipt.delivery_receipt_doc_path).startswith(os.path.abspath(settings.UPLOAD_DIR)):
             raise HTTPException(status_code=403, detail="访问被拒绝")
         
-        # 确定文件名
-        filename = f"delivery_receipt_{tracking_number}.docx"
+        # 使用真实生成的文件名（保留时间戳）
+        actual_filename = os.path.basename(receipt.delivery_receipt_doc_path)
         
         return FileResponse(
             path=receipt.delivery_receipt_doc_path,
-            filename=filename,
+            filename=actual_filename,
             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
         

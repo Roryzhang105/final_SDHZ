@@ -564,16 +564,34 @@ class TaskService:
             # 1. 确保DeliveryReceipt记录存在并同步文件路径
             await self._sync_file_paths_to_delivery_receipt(task)
             
-            # 2. 调用生成服务
-            # 将datetime对象转换为字符串格式
-            send_time_str = task.delivery_time.strftime("%Y-%m-%d %H:%M:%S") if task.delivery_time else None
+            # 2. 获取已保存的回证信息
+            from app.models.delivery_receipt import DeliveryReceipt
+            receipt = self.db.query(DeliveryReceipt).filter(
+                DeliveryReceipt.tracking_number == task.tracking_number
+            ).first()
             
+            # 3. 准备生成参数，优先使用保存的信息
+            doc_title = receipt.doc_title if receipt and receipt.doc_title else "送达回证"
+            sender = receipt.sender if receipt and receipt.sender else ""
+            send_location = receipt.send_location if receipt and receipt.send_location else ""
+            receiver = receipt.receiver if receipt and receipt.receiver else ""
+            
+            # 时间优先使用保存的时间，其次使用签收时间
+            send_time_str = None
+            if receipt and receipt.send_time:
+                send_time_str = receipt.send_time
+            elif task.delivery_time:
+                send_time_str = task.delivery_time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            print(f"使用回证信息 - 文档标题: {doc_title}, 送达人: {sender}, 送达地点: {send_location}, 受送达人: {receiver}, 送达时间: {send_time_str}")
+            
+            # 4. 调用生成服务
             receipt_result = self.receipt_generator_service.generate_delivery_receipt(
                 tracking_number=task.tracking_number,
-                doc_title="送达回证",
-                sender="",
-                send_location="",
-                receiver="",
+                doc_title=doc_title,
+                sender=sender,
+                send_location=send_location,
+                receiver=receiver,
                 send_time=send_time_str
             )
             

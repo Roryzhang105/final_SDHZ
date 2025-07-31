@@ -119,6 +119,14 @@ class DeliveryReceiptGeneratorService:
             生成结果
         """
         try:
+            # 添加参数接收日志
+            print(f"DEBUG: DeliveryReceiptGeneratorService.generate_delivery_receipt 接收到的参数:")
+            print(f"  - tracking_number: '{tracking_number}'")
+            print(f"  - doc_title: '{doc_title}'")
+            print(f"  - sender: '{sender}'")
+            print(f"  - send_time: '{send_time}'")
+            print(f"  - send_location: '{send_location}'")
+            print(f"  - receiver: '{receiver}'")
             # 1. 查找或创建送达回证记录
             receipt = self.delivery_receipt_service.get_delivery_receipt_by_tracking(tracking_number)
             if not receipt:
@@ -183,7 +191,16 @@ class DeliveryReceiptGeneratorService:
                     "tracking_number": tracking_number
                 }
             
-            # 4. 生成Word文档
+            # 4. 清理旧文件（如果存在）
+            old_doc_path = receipt.delivery_receipt_doc_path
+            if old_doc_path and os.path.exists(old_doc_path):
+                try:
+                    os.remove(old_doc_path)
+                    print(f"DEBUG: 已删除旧的Word文档: {old_doc_path}")
+                except Exception as e:
+                    print(f"DEBUG: 删除旧文档失败: {e}")
+            
+            # 5. 生成Word文档
             doc_result = self._generate_word_document(
                 tracking_number=tracking_number,
                 doc_title=doc_title,
@@ -198,9 +215,15 @@ class DeliveryReceiptGeneratorService:
             if not doc_result["success"]:
                 return doc_result
             
-            # 5. 更新数据库记录
+            # 6. 更新数据库记录
+            old_path = receipt.delivery_receipt_doc_path
             receipt.delivery_receipt_doc_path = doc_result["doc_path"]
             self.db.commit()
+            
+            print(f"DEBUG: 数据库记录更新完成:")
+            print(f"  - 旧文件路径: {old_path}")
+            print(f"  - 新文件路径: {receipt.delivery_receipt_doc_path}")
+            print(f"  - 记录ID: {receipt.id}")
             
             return {
                 "success": True,
@@ -314,10 +337,17 @@ class DeliveryReceiptGeneratorService:
         调用insert_imgs_delivery_receipt.py生成Word文档
         """
         try:
-            # 生成输出文件名
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # 生成输出文件名 - 使用毫秒级时间戳确保唯一性
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 去掉最后3位，保留毫秒
             doc_filename = f"delivery_receipt_{tracking_number}_{timestamp}.docx"
             output_path = self.output_dir / doc_filename
+            
+            # 确保生成的文件名是唯一的
+            counter = 1
+            while output_path.exists():
+                doc_filename = f"delivery_receipt_{tracking_number}_{timestamp}_{counter}.docx"
+                output_path = self.output_dir / doc_filename
+                counter += 1
             
             # 构建命令参数
             cmd = [
@@ -339,6 +369,11 @@ class DeliveryReceiptGeneratorService:
             if receiver:
                 cmd.extend(["--receiver", receiver])
             
+            # 添加命令执行日志
+            print(f"DEBUG: 执行Word生成命令:")
+            print(f"DEBUG: 命令: {' '.join(cmd)}")
+            print(f"DEBUG: 工作目录: {self.legacy_dir}")
+            
             # 执行命令
             result = subprocess.run(
                 cmd,
@@ -347,6 +382,12 @@ class DeliveryReceiptGeneratorService:
                 timeout=30,
                 cwd=str(self.legacy_dir)
             )
+            
+            # 添加执行结果日志
+            print(f"DEBUG: subprocess执行结果:")
+            print(f"  - 返回码: {result.returncode}")
+            print(f"  - stdout: {result.stdout}")
+            print(f"  - stderr: {result.stderr}")
             
             if result.returncode != 0:
                 return {

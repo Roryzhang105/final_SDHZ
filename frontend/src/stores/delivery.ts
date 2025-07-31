@@ -65,13 +65,13 @@ export const useDeliveryStore = defineStore('delivery', () => {
   // 下载送达回证文档
   const downloadReceipt = async (trackingNumber: string) => {
     try {
-      const blob = await deliveryApi.download(trackingNumber)
+      const result = await deliveryApi.downloadByTrackingNumber(trackingNumber)
       
       // 创建下载链接
-      const url = window.URL.createObjectURL(blob)
+      const url = window.URL.createObjectURL(result.blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `delivery_receipt_${trackingNumber}.docx`
+      link.download = result.filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
