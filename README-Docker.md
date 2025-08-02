@@ -1,5 +1,7 @@
 # Docker 部署指南
 
+> **送达回证自动化处理系统** - 完整的Docker容器化部署方案
+
 ## 🚀 快速启动
 
 ### 一键启动所有服务
@@ -8,33 +10,73 @@
 git clone <repository-url>
 cd final_SDHZ
 
-# 启动所有服务
+# 启动所有服务 (首次启动会自动构建镜像)
 docker-compose up -d
 
 # 查看服务状态
 docker-compose ps
 
-# 查看日志
+# 查看实时日志
 docker-compose logs -f
+
+# 查看特定服务日志
+docker-compose logs -f backend
+docker-compose logs -f frontend
 ```
 
-### 访问应用
+### 🌐 访问应用
 - **前端应用**: http://localhost (端口 80)
 - **后端API**: http://localhost:8000
 - **API文档**: http://localhost:8000/docs
+- **API替代文档**: http://localhost:8000/redoc
 - **Celery监控**: http://localhost:5555 (可选)
 - **默认管理员账号**: admin / ww731226
 
-## 📋 服务概览
+### ✅ 服务健康检查
+```bash
+# 检查所有服务状态
+docker-compose ps
 
-| 服务 | 容器名 | 端口 | 说明 |
-|------|--------|------|------|
-| frontend | sdhz_frontend | 80 | Vue.js 前端应用 |
-| backend | sdhz_backend | 8000 | FastAPI 后端服务 |
-| postgres | sdhz_postgres | 5432 | PostgreSQL 数据库 |
-| redis | sdhz_redis | 6379 | Redis 缓存 |
-| celery-worker | sdhz_celery_worker | - | 异步任务处理 |
-| flower | sdhz_flower | 5555 | Celery 监控界面 |
+# 检查后端API健康状态
+curl http://localhost:8000/health
+
+# 检查前端服务
+curl http://localhost/
+```
+
+## 📋 服务架构概览
+
+| 服务名称 | 容器名 | 端口映射 | 技术栈 | 说明 |
+|---------|--------|----------|--------|------|
+| **frontend** | sdhz_frontend | 80:80 | Vue 3 + Nginx | 前端Web应用，用户界面 |
+| **backend** | sdhz_backend | 8000:8000 | FastAPI + Uvicorn | 后端API服务，核心业务逻辑 |
+| **postgres** | sdhz_postgres | 5432:5432 | PostgreSQL 15 | 主数据库，持久化存储 |
+| **redis** | sdhz_redis | 6379:6379 | Redis 7 | 缓存服务，任务队列 |
+| **celery-worker** | sdhz_celery_worker | - | Celery | 异步任务处理器 |
+| **celery-beat** | sdhz_celery_beat | - | Celery Beat | 定时任务调度器 |
+| **flower** | sdhz_flower | 5555:5555 | Flower | Celery监控界面 (可选) |
+
+### 🔗 服务依赖关系
+```mermaid
+graph TB
+    Frontend[前端 Vue App] --> Backend[后端 FastAPI]
+    Backend --> PostgreSQL[PostgreSQL 数据库]
+    Backend --> Redis[Redis 缓存]
+    Backend --> CeleryWorker[Celery Worker]
+    CeleryWorker --> Redis
+    CeleryWorker --> PostgreSQL
+    CeleryBeat[Celery Beat] --> Redis
+    Flower[Flower 监控] --> Redis
+```
+
+### 📊 资源配置
+| 服务 | CPU限制 | 内存限制 | 存储 |
+|------|---------|----------|------|
+| frontend | 0.5核 | 512MB | - |
+| backend | 1.0核 | 1GB | uploads/ |
+| postgres | 0.5核 | 1GB | postgres_data |
+| redis | 0.25核 | 256MB | redis_data |
+| celery-worker | 1.0核 | 1GB | - |
 
 ## 🛠️ 开发环境
 
