@@ -25,7 +25,7 @@
 ## 🏗️ 技术栈
 
 - **框架**: FastAPI (异步Web框架)
-- **数据库**: SQLite (生产环境可配置PostgreSQL)
+- **数据库**: PostgreSQL (支持SQLite开发环境)
 - **缓存**: Redis (任务队列和缓存)
 - **任务队列**: Celery (异步任务处理)
 - **ORM**: SQLAlchemy (数据库操作)
@@ -58,10 +58,27 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-3. **初始化数据库**
+3. **设置数据库**
+
+**选项1: 使用 PostgreSQL (推荐生产环境)**
 ```bash
+# 使用 Docker Compose 启动 PostgreSQL (推荐)
+docker-compose up -d postgres redis
+
+# 或使用一键迁移脚本
+./start_postgres.sh
+
+# 手动初始化
 python init_db.py
 ```
+
+**选项2: 使用 SQLite (开发环境)**
+```bash
+# 直接初始化 SQLite 数据库
+python init_db.py
+```
+
+> 📝 如果需要从 SQLite 迁移到 PostgreSQL，参考 [POSTGRESQL_MIGRATION.md](./POSTGRESQL_MIGRATION.md)
 
 4. **启动服务**
 ```bash

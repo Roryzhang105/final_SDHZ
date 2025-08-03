@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Text, Enum, DateTime, JSON, Float
+from sqlalchemy import Column, String, Integer, ForeignKey, Text, Enum, DateTime, JSON, Float, Index
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
@@ -27,7 +27,7 @@ class Task(BaseModel):
     description = Column(Text)
     
     # 任务状态
-    status = Column(Enum(TaskStatusEnum), default=TaskStatusEnum.PENDING)
+    status = Column(Enum(TaskStatusEnum), default=TaskStatusEnum.PENDING, index=True)
     
     # 文件信息
     image_path = Column(String(500))  # 原始图片路径
@@ -66,6 +66,14 @@ class Task(BaseModel):
     # 额外信息
     extra_metadata = Column(JSON)  # 其他元数据
     remarks = Column(Text)         # 备注
+    
+    # 表级索引定义
+    __table_args__ = (
+        Index('idx_tasks_status_created', 'status', 'created_at'),  # 状态和创建时间复合索引
+        Index('idx_tasks_created_at', 'created_at'),  # 创建时间索引
+        Index('idx_tasks_user_status', 'user_id', 'status'),  # 用户和状态复合索引
+        Index('idx_tasks_tracking_number', 'tracking_number'),  # 快递单号索引
+    )
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

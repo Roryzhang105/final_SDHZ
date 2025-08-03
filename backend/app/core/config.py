@@ -17,8 +17,16 @@ class Settings(BaseSettings):
     # CORS origins - 简化处理
     BACKEND_CORS_ORIGINS: str = ""
 
-    # 数据库配置 - 使用SQLite
-    DATABASE_URL: str = "sqlite:///./delivery_receipt.db"
+    # 数据库配置
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "delivery_receipt"
+    POSTGRES_PORT: int = 5432
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379/0"

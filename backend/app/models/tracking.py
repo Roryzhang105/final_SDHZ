@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Text, DateTime, JSON
+from sqlalchemy import Column, String, Integer, ForeignKey, Text, DateTime, JSON, Index
 from sqlalchemy.orm import relationship
 
 from .base import BaseModel
@@ -12,8 +12,8 @@ class TrackingInfo(BaseModel):
     delivery_receipt = relationship("DeliveryReceipt", back_populates="tracking_info")
     
     # 物流状态
-    current_status = Column(String(50))
-    last_update = Column(DateTime)
+    current_status = Column(String(50), index=True)
+    last_update = Column(DateTime, index=True)
     
     # 物流轨迹数据 (JSON格式存储)
     tracking_data = Column(JSON)
@@ -26,3 +26,11 @@ class TrackingInfo(BaseModel):
     
     # 备注
     notes = Column(Text)
+    
+    # 表级索引定义
+    __table_args__ = (
+        Index('idx_tracking_info_status_update', 'current_status', 'last_update'),  # 状态和更新时间复合索引
+        Index('idx_tracking_info_updated_at', 'updated_at'),  # 更新时间索引
+        Index('idx_tracking_info_created_at', 'created_at'),  # 创建时间索引
+        Index('idx_tracking_info_signed_update', 'is_signed', 'last_update'),  # 签收状态和时间复合索引
+    )

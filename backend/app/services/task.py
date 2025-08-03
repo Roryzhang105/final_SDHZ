@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import desc
+from sqlalchemy.orm import Session, sessionmaker, joinedload
+from sqlalchemy import desc, func, text
 from sqlalchemy.orm.exc import DetachedInstanceError
 from typing import List, Optional, Dict, Any
 from fastapi import UploadFile
@@ -85,18 +85,36 @@ class TaskService:
             }
     
     def get_task_by_id(self, task_id: str) -> Optional[Task]:
-        """根据任务ID获取任务"""
-        return self.db.query(Task).filter(Task.task_id == task_id).first()
+        """根据任务ID获取任务 - 优化版本"""
+        # 添加查询超时和eager loading
+        return self.db.query(Task).options(
+            joinedload(Task.user)
+        ).filter(Task.task_id == task_id).execution_options(
+            compiled_cache={},
+            query_timeout=15
+        ).first()
     
     def get_tasks_by_user(self, user_id: int, limit: int = 50, offset: int = 0) -> List[Task]:
-        """获取用户的任务列表"""
-        return self.db.query(Task).filter(
+        """获取用户的任务列表 - 优化版本"""
+        # 添加查询超时并使用eager loading避免N+1问题
+        return self.db.query(Task).options(
+            joinedload(Task.user)
+        ).filter(
             Task.user_id == user_id
-        ).order_by(desc(Task.created_at)).limit(limit).offset(offset).all()
+        ).order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
+            compiled_cache={},
+            query_timeout=30
+        ).all()
     
     def get_all_tasks(self, limit: int = 50, offset: int = 0) -> List[Task]:
-        """获取所有任务列表"""
-        return self.db.query(Task).order_by(desc(Task.created_at)).limit(limit).offset(offset).all()
+        """获取所有任务列表 - 优化版本"""
+        # 添加查询超时并使用eager loading避免N+1问题
+        return self.db.query(Task).options(
+            joinedload(Task.user)
+        ).order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
+            compiled_cache={},
+            query_timeout=30
+        ).all()
     
     def update_task_status(self, task_id: str, status: TaskStatusEnum, **kwargs) -> bool:
         """更新任务状态"""
@@ -274,30 +292,44 @@ class TaskService:
                     print(f"Failed to remove file {file_path}: {e}")
     
     def get_task_statistics(self, user_id: Optional[int] = None) -> Dict[str, int]:
-        """获取任务统计信息"""
-        query = self.db.query(Task)
+        """获取任务统计信息 - 优化版本，避免N+1查询"""
+        # 使用聚合查询避免加载所有任务数据
+        base_query = self.db.query(
+            Task.status,
+            func.count(Task.id).label('count')
+        ).execution_options(
+            compiled_cache={},
+            query_timeout=20
+        )
+        
         if user_id:
-            query = query.filter(Task.user_id == user_id)
+            base_query = base_query.filter(Task.user_id == user_id)
         
-        tasks = query.all()
+        # 按状态分组统计
+        status_counts = base_query.group_by(Task.status).all()
         
+        # 初始化统计结果
         stats = {
-            "total": len(tasks),
+            "total": 0,
             "pending": 0,
             "processing": 0,
             "completed": 0,
             "failed": 0
         }
         
-        for task in tasks:
-            if task.status == TaskStatusEnum.COMPLETED:
-                stats["completed"] += 1
-            elif task.status == TaskStatusEnum.FAILED:
-                stats["failed"] += 1
-            elif task.is_processing:
-                stats["processing"] += 1
+        # 处理统计结果
+        for status, count in status_counts:
+            stats["total"] += count
+            
+            if status == TaskStatusEnum.COMPLETED:
+                stats["completed"] = count
+            elif status == TaskStatusEnum.FAILED:
+                stats["failed"] = count
+            elif status in [TaskStatusEnum.PENDING, TaskStatusEnum.RECOGNIZING, 
+                           TaskStatusEnum.TRACKING, TaskStatusEnum.GENERATING]:
+                stats["processing"] += count
             else:
-                stats["pending"] += 1
+                stats["pending"] += count
         
         return stats
     
@@ -540,10 +572,9 @@ class TaskService:
                 task.error_message = "物流截图和二维码标签生成均失败"
                 print(f"所有文件生成步骤都失败 - 任务: {task.task_id}")
             
-            # 如果状态还没有被设置为COMPLETED，则需要提交其他状态
-            if task.status != TaskStatusEnum.COMPLETED:
-                self.db.commit()
-                print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
+            # 如果状态不是成功，则提交失败状态
+            transaction.commit()
+            print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
         except DetachedInstanceError as e:
             print(f"数据库会话错误 - 文档生成: {str(e)}")
@@ -588,8 +619,8 @@ class TaskService:
                     filename = os.path.basename(screenshot_path)
                     task.screenshot_url = f"/static/tracking_screenshots/{filename}"
                     
-                    # 立即保存到数据库
-                    self.db.commit()
+                    # 保存到数据库但不提交事务
+                    self.db.flush()
                     print(f"物流截图生成成功: {task.screenshot_url}")
                     return True
                 elif screenshot_result.get("html_fallback_path"):
@@ -598,8 +629,8 @@ class TaskService:
                     filename = os.path.basename(task.screenshot_path)
                     task.screenshot_url = f"/static/tracking_html/{filename}"
                     
-                    # 立即保存到数据库
-                    self.db.commit()
+                    # 保存到数据库但不提交事务
+                    self.db.flush()
                     print(f"物流HTML文件生成成功: {task.screenshot_url}")
                     return True
             else:
@@ -635,8 +666,8 @@ class TaskService:
                     filename = os.path.basename(final_label_path)
                     task.extra_metadata["qr_label_url"] = f"/static/uploads/{filename}"
                     
-                    # 立即保存到数据库
-                    self.db.commit()
+                    # 保存到数据库但不提交事务
+                    self.db.flush()
                     print(f"二维码标签生成成功: {task.extra_metadata['qr_label_url']}")
                     return True
             else:
@@ -694,8 +725,8 @@ class TaskService:
                     filename = os.path.basename(task.document_path)
                     task.document_url = f"/static/documents/{filename}"
                     
-                    # 立即保存到数据库
-                    self.db.commit()
+                    # 保存到数据库但不提交事务
+                    self.db.flush()
                     print(f"送达回证生成成功: {task.document_url}")
                     return True
             else:
@@ -714,12 +745,17 @@ class TaskService:
         try:
             print(f"同步文件路径到数据库 - 任务: {task.task_id}")
             
-            # 1. 创建或获取DeliveryReceipt记录
+            # 1. 创建或获取DeliveryReceipt记录，使用eager loading
             from app.models.delivery_receipt import DeliveryReceipt
             from app.models.tracking import TrackingInfo
             
-            receipt = self.db.query(DeliveryReceipt).filter(
+            receipt = self.db.query(DeliveryReceipt).options(
+                joinedload(DeliveryReceipt.tracking_info)
+            ).filter(
                 DeliveryReceipt.tracking_number == task.tracking_number
+            ).execution_options(
+                compiled_cache={},
+                query_timeout=15
             ).first()
             
             if not receipt:

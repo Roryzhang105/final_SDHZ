@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime
 from celery import current_app as celery_app
 from selenium import webdriver
@@ -6,13 +7,23 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import WebDriverException, TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import SessionLocal
 from app.core.config import settings
 from app.services.delivery_receipt import DeliveryReceiptService
 from app.services.tracking import TrackingService
+from app.tasks.retry_config import (
+    get_retry_config,
+    retry_task,
+    log_task_failure,
+    log_task_retry
+)
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task

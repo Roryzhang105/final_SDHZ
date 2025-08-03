@@ -18,11 +18,21 @@ from app.services.auth import AuthService
 
 
 def create_database_if_not_exists():
-    """检查SQLite数据库连接"""
+    """检查数据库连接"""
     try:
-        # 尝试连接到SQLite数据库
-        engine.connect()
-        print("SQLite数据库连接正常")
+        # 尝试连接到数据库
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        # 检查数据库类型
+        db_url = str(settings.DATABASE_URL)
+        if db_url.startswith("postgresql"):
+            print("PostgreSQL数据库连接正常")
+        elif db_url.startswith("sqlite"):
+            print("SQLite数据库连接正常")
+        else:
+            print("数据库连接正常")
+            
     except Exception as e:
         print(f"数据库连接失败: {e}")
         return False
@@ -152,6 +162,8 @@ def init_admin_user():
 def main():
     """主函数"""
     print("开始初始化数据库...")
+    print(f"数据库类型: {'PostgreSQL' if str(settings.DATABASE_URL).startswith('postgresql') else 'SQLite'}")
+    print(f"数据库连接: {settings.DATABASE_URL}")
     
     # 1. 检查数据库连接
     if not create_database_if_not_exists():
@@ -170,6 +182,13 @@ def main():
         return False
     
     print("🎉 数据库初始化完成！")
+    
+    # 如果是PostgreSQL，提供迁移提示
+    if str(settings.DATABASE_URL).startswith('postgresql'):
+        print("\n📝 PostgreSQL 数据库已初始化")
+        print("如需从 SQLite 迁移数据，请运行:")
+        print("python scripts/migrate_to_postgres.py --sqlite-path ./delivery_receipt.db")
+    
     return True
 
 

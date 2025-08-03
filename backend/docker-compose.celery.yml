@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Redis 作为 Celery Broker
+  redis:
+    image: redis:7-alpine
+    container_name: delivery_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - delivery_network
+
+  # Celery Worker
+  celery_worker:
+    build: .
+    container_name: delivery_celery_worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+      - ./logs:/app/logs
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - delivery_network
+
+  # Celery Beat 调度器
+  celery_beat:
+    build: .
+    container_name: delivery_celery_beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - redis
+      - celery_worker
+    restart: unless-stopped
+    networks:
+      - delivery_network
+
+  # Celery Flower 监控界面
+  celery_flower:
+    build: .
+    container_name: delivery_celery_flower
+    command: celery -A app.tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
+    restart: unless-stopped
+    networks:
+      - delivery_network
+
+volumes:
+  redis_data:
+
+networks:
+  delivery_network:
+    driver: bridge

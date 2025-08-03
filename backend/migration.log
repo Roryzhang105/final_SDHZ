@@ -1,0 +1,53 @@
+2025-08-03 04:06:26,939 - INFO - 找到 SQLite 数据库: ./delivery_receipt.db
+2025-08-03 04:19:57,315 - INFO - 开始数据库迁移...
+2025-08-03 04:19:57,315 - INFO - 找到 SQLite 数据库: ./delivery_receipt.db
+2025-08-03 04:19:57,319 - INFO - SQLite 连接成功
+2025-08-03 04:19:57,320 - ERROR - 数据库连接失败: (psycopg2.OperationalError) connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-08-03 04:28:08,762 - INFO - 开始数据库迁移...
+2025-08-03 04:28:08,762 - INFO - 找到 SQLite 数据库: ./delivery_receipt.db
+2025-08-03 04:28:08,766 - INFO - SQLite 连接成功
+2025-08-03 04:28:08,808 - INFO - PostgreSQL 连接成功
+2025-08-03 04:28:09,158 - INFO - PostgreSQL 表结构创建成功
+2025-08-03 04:28:09,339 - INFO - PostgreSQL 表数据清空完成
+2025-08-03 04:28:09,339 - INFO - 开始迁移表: users
+2025-08-03 04:28:09,346 - INFO - 从 SQLite 读取到 2 行数据
+2025-08-03 04:28:09,358 - INFO - 已迁移 2/2 行
+2025-08-03 04:28:09,358 - INFO - 表 users 迁移完成: 2 行
+2025-08-03 04:28:09,359 - INFO - 开始迁移表: couriers
+2025-08-03 04:28:09,363 - INFO - 从 SQLite 读取到 6 行数据
+2025-08-03 04:28:09,373 - INFO - 已迁移 6/6 行
+2025-08-03 04:28:09,373 - INFO - 表 couriers 迁移完成: 6 行
+2025-08-03 04:28:09,373 - INFO - 开始迁移表: delivery_receipts
+2025-08-03 04:28:09,376 - INFO - 从 SQLite 读取到 5 行数据
+2025-08-03 04:28:09,389 - INFO - 已迁移 5/5 行
+2025-08-03 04:28:09,389 - INFO - 表 delivery_receipts 迁移完成: 5 行
+2025-08-03 04:28:09,389 - INFO - 开始迁移表: tracking_info
+2025-08-03 04:28:09,393 - INFO - 从 SQLite 读取到 5 行数据
+2025-08-03 04:28:09,408 - INFO - 已迁移 5/5 行
+2025-08-03 04:28:09,408 - INFO - 表 tracking_info 迁移完成: 5 行
+2025-08-03 04:28:09,409 - INFO - 开始迁移表: courier_patterns
+2025-08-03 04:28:09,412 - INFO - 从 SQLite 读取到 5 行数据
+2025-08-03 04:28:09,421 - INFO - 已迁移 5/5 行
+2025-08-03 04:28:09,421 - INFO - 表 courier_patterns 迁移完成: 5 行
+2025-08-03 04:28:09,422 - INFO - 开始迁移表: recognition_tasks
+2025-08-03 04:28:09,425 - INFO - 表 recognition_tasks 无数据，跳过
+2025-08-03 04:28:09,425 - INFO - 开始迁移表: recognition_results
+2025-08-03 04:28:09,428 - INFO - 表 recognition_results 无数据，跳过
+2025-08-03 04:28:09,429 - INFO - 开始迁移表: tasks
+2025-08-03 04:28:09,435 - INFO - 从 SQLite 读取到 18 行数据
+2025-08-03 04:28:09,467 - INFO - 已迁移 18/18 行
+2025-08-03 04:28:09,467 - INFO - 表 tasks 迁移完成: 18 行
+2025-08-03 04:28:09,468 - INFO - 开始验证迁移结果...
+2025-08-03 04:28:09,475 - INFO - 表 users: SQLite=2, PostgreSQL=2
+2025-08-03 04:28:09,486 - INFO - 表 couriers: SQLite=6, PostgreSQL=6
+2025-08-03 04:28:09,497 - INFO - 表 delivery_receipts: SQLite=5, PostgreSQL=5
+2025-08-03 04:28:09,509 - INFO - 表 tracking_info: SQLite=5, PostgreSQL=5
+2025-08-03 04:28:09,521 - INFO - 表 courier_patterns: SQLite=5, PostgreSQL=5
+2025-08-03 04:28:09,532 - INFO - 表 recognition_tasks: SQLite=0, PostgreSQL=0
+2025-08-03 04:28:09,542 - INFO - 表 recognition_results: SQLite=0, PostgreSQL=0
+2025-08-03 04:28:09,550 - INFO - 表 tasks: SQLite=18, PostgreSQL=18
+2025-08-03 04:28:09,557 - INFO - ✅ 数据迁移验证通过
+2025-08-03 04:28:09,559 - INFO - 🎉 数据迁移完成！耗时: 0:00:00.796275

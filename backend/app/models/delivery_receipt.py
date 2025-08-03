@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Text, Enum, DateTime
+from sqlalchemy import Column, String, Integer, ForeignKey, Text, Enum, DateTime, Index
 from sqlalchemy.orm import relationship
 import enum
 
@@ -27,7 +27,7 @@ class DeliveryReceipt(BaseModel):
     receiver = Column(String(100))      # 受送达人
     
     # 状态信息
-    status = Column(Enum(DeliveryStatusEnum), default=DeliveryStatusEnum.CREATED)
+    status = Column(Enum(DeliveryStatusEnum), default=DeliveryStatusEnum.CREATED, index=True)
     
     # 文件路径
     qr_code_path = Column(String(255))              # 二维码文件路径
@@ -42,3 +42,10 @@ class DeliveryReceipt(BaseModel):
     
     # 关联关系
     tracking_info = relationship("TrackingInfo", back_populates="delivery_receipt", uselist=False)
+    
+    # 表级索引定义
+    __table_args__ = (
+        Index('idx_delivery_receipts_user_status', 'user_id', 'status'),  # 用户和状态复合索引
+        Index('idx_delivery_receipts_status_created', 'status', 'created_at'),  # 状态和创建时间复合索引
+        Index('idx_delivery_receipts_created_at', 'created_at'),  # 创建时间索引
+    )

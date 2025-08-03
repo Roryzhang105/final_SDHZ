@@ -2,7 +2,7 @@
 # 这个文件支持基于 --target 参数构建不同的服务
 
 # 前端构建阶段
-FROM node:20.19-alpine AS frontend-builder
+FROM node:22.12-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci --only=production --ignore-scripts
@@ -62,6 +62,10 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     unzip \
     curl \
+    libzbar0 \
+    libzbar-dev \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
