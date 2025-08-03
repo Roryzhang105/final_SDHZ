@@ -8,6 +8,7 @@ from datetime import datetime
 import uuid
 import shutil
 import asyncio
+import logging
 
 from app.models.task import Task, TaskStatusEnum
 from app.services.file import FileService
@@ -17,6 +18,8 @@ from app.services.tracking_screenshot import TrackingScreenshotService
 from app.services.qr_generation import QRGenerationService
 from app.services.delivery_receipt_generator import DeliveryReceiptGeneratorService
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class TaskService:
@@ -30,6 +33,75 @@ class TaskService:
         self.screenshot_service = TrackingScreenshotService(db)
         self.qr_generation_service = QRGenerationService(db)
         self.receipt_generator_service = DeliveryReceiptGeneratorService(db)
+    
+    async def _send_websocket_update(self, task: Task, message_type: str = "task_update", extra_data: Dict[str, Any] = None):
+        """发送WebSocket任务状态更新"""
+        try:
+            from app.api.api_v1.websocket import manager
+            
+            # 构建推送消息
+            message = {
+                "type": message_type,
+                "task_id": task.task_id,
+                "status": task.status.value,
+                "message": self._get_status_message(task.status),
+                "progress": self._calculate_progress(task.status),
+                "timestamp": datetime.now().isoformat(),
+                "data": {
+                    "task_name": task.task_name,
+                    "description": task.description,
+                    "qr_code": task.qr_code,
+                    "tracking_number": task.tracking_number,
+                    "courier_company": task.courier_company,
+                    "delivery_status": task.delivery_status,
+                    "error_message": task.error_message,
+                    "document_url": task.document_url,
+                    "screenshot_url": task.screenshot_url,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                    "delivery_time": task.delivery_time.isoformat() if task.delivery_time else None,
+                    "processing_time": task.processing_time
+                }
+            }
+            
+            # 添加额外数据
+            if extra_data:
+                message["data"].update(extra_data)
+            
+            # 发送给任务所属用户
+            if task.user_id:
+                await manager.send_personal_message(message, task.user_id)
+                logger.info(f"WebSocket推送发送成功 - 用户: {task.user_id}, 任务: {task.task_id}, 状态: {task.status.value}")
+            
+        except Exception as e:
+            logger.error(f"WebSocket推送失败: {str(e)}")
+    
+    def _get_status_message(self, status: TaskStatusEnum) -> str:
+        """获取状态对应的消息"""
+        status_messages = {
+            TaskStatusEnum.PENDING: "任务等待处理",
+            TaskStatusEnum.RECOGNIZING: "正在识别二维码",
+            TaskStatusEnum.TRACKING: "正在查询物流信息",
+            TaskStatusEnum.DELIVERED: "快递已签收",
+            TaskStatusEnum.GENERATING: "正在生成文档",
+            TaskStatusEnum.COMPLETED: "任务处理完成",
+            TaskStatusEnum.FAILED: "任务处理失败"
+        }
+        return status_messages.get(status, "未知状态")
+    
+    def _calculate_progress(self, status: TaskStatusEnum) -> int:
+        """计算任务进度百分比"""
+        progress_map = {
+            TaskStatusEnum.PENDING: 10,
+            TaskStatusEnum.RECOGNIZING: 25,
+            TaskStatusEnum.TRACKING: 50,
+            TaskStatusEnum.DELIVERED: 75,
+            TaskStatusEnum.GENERATING: 90,
+            TaskStatusEnum.COMPLETED: 100,
+            TaskStatusEnum.FAILED: 0
+        }
+        return progress_map.get(status, 0)
     
     async def create_task_from_upload(self, file: UploadFile, user_id: Optional[int] = None) -> Dict[str, Any]:
         """从上传的文件创建任务"""
@@ -116,13 +188,14 @@ class TaskService:
             query_timeout=30
         ).all()
     
-    def update_task_status(self, task_id: str, status: TaskStatusEnum, **kwargs) -> bool:
+    async def update_task_status(self, task_id: str, status: TaskStatusEnum, **kwargs) -> bool:
         """更新任务状态"""
         try:
             task = self.get_task_by_id(task_id)
             if not task:
                 return False
             
+            old_status = task.status
             task.status = status
             
             # 更新其他字段
@@ -137,6 +210,14 @@ class TaskService:
                     task.processing_time = (task.completed_at - task.started_at).total_seconds()
             
             self.db.commit()
+            
+            # 发送WebSocket推送（仅在状态真正改变时）
+            if old_status != status:
+                await self._send_websocket_update(task, "status_changed", {
+                    "old_status": old_status.value,
+                    "new_status": status.value
+                })
+            
             return True
             
         except Exception as e:
@@ -144,44 +225,44 @@ class TaskService:
             print(f"Error updating task status: {e}")
             return False
     
-    def update_task_recognition_result(self, task_id: str, qr_code: str, tracking_number: str = None) -> bool:
+    async def update_task_recognition_result(self, task_id: str, qr_code: str, tracking_number: str = None) -> bool:
         """更新任务识别结果"""
-        return self.update_task_status(
+        return await self.update_task_status(
             task_id, 
             TaskStatusEnum.RECOGNIZING,
             qr_code=qr_code,
             tracking_number=tracking_number
         )
     
-    def update_task_tracking_result(self, task_id: str, tracking_data: Dict, delivery_status: str = None) -> bool:
+    async def update_task_tracking_result(self, task_id: str, tracking_data: Dict, delivery_status: str = None) -> bool:
         """更新任务物流跟踪结果"""
-        return self.update_task_status(
+        return await self.update_task_status(
             task_id,
             TaskStatusEnum.TRACKING,
             tracking_data=tracking_data,
             delivery_status=delivery_status
         )
     
-    def mark_task_delivered(self, task_id: str, delivery_time: datetime = None) -> bool:
+    async def mark_task_delivered(self, task_id: str, delivery_time: datetime = None) -> bool:
         """标记任务为已签收"""
-        return self.update_task_status(
+        return await self.update_task_status(
             task_id,
             TaskStatusEnum.DELIVERED,
             delivery_time=delivery_time or datetime.now()
         )
     
-    def mark_task_completed(self, task_id: str, document_url: str = None, screenshot_url: str = None) -> bool:
+    async def mark_task_completed(self, task_id: str, document_url: str = None, screenshot_url: str = None) -> bool:
         """标记任务为已完成"""
-        return self.update_task_status(
+        return await self.update_task_status(
             task_id,
             TaskStatusEnum.COMPLETED,
             document_url=document_url,
             screenshot_url=screenshot_url
         )
     
-    def mark_task_failed(self, task_id: str, error_message: str) -> bool:
+    async def mark_task_failed(self, task_id: str, error_message: str) -> bool:
         """标记任务为失败"""
-        return self.update_task_status(
+        return await self.update_task_status(
             task_id,
             TaskStatusEnum.FAILED,
             error_message=error_message
@@ -432,6 +513,9 @@ class TaskService:
             task.status = TaskStatusEnum.RECOGNIZING
             self.db.commit()
             
+            # 发送WebSocket推送
+            await self._send_websocket_update(task, "recognition_started")
+            
             # 进行二维码识别
             recognition_result = self.qr_service.recognize_single_image(task.image_path)
             print(f"二维码识别结果: {recognition_result}")
@@ -455,6 +539,13 @@ class TaskService:
                     # 先提交识别结果
                     self.db.commit()
                     
+                    # 发送WebSocket推送
+                    await self._send_websocket_update(task, "recognition_completed", {
+                        "qr_code": task.qr_code,
+                        "tracking_number": task.tracking_number,
+                        "courier_company": task.courier_company
+                    })
+                    
                     # 触发物流跟踪 - 异步执行
                     asyncio.create_task(self._trigger_tracking(task.task_id))
                 else:
@@ -468,6 +559,11 @@ class TaskService:
                 task.status = TaskStatusEnum.FAILED
                 task.error_message = recognition_result.get("error_message", "未能识别到二维码")
                 print(f"识别失败: {task.error_message}")
+                
+                # 发送WebSocket推送
+                await self._send_websocket_update(task, "recognition_failed", {
+                    "error_message": task.error_message
+                })
             
             self.db.commit()
             
@@ -514,6 +610,9 @@ class TaskService:
             task.status = TaskStatusEnum.TRACKING
             self.db.commit()
             
+            # 发送WebSocket推送
+            await self._send_websocket_update(task, "tracking_started")
+            
             # 查询物流信息
             company_code = "ems"  # 根据实际情况确定快递公司代码
             tracking_result = self.tracking_service.query_express(task.tracking_number, company_code)
@@ -546,6 +645,12 @@ class TaskService:
                     
                     # 立即提交状态更新
                     self.db.commit()
+                    
+                    # 发送WebSocket推送
+                    await self._send_websocket_update(task, "package_delivered", {
+                        "delivery_time": task.delivery_time.isoformat() if task.delivery_time else None,
+                        "tracking_data": task.tracking_data
+                    })
                     
                     # 触发后续处理（生成截图、回证等）- 异步执行
                     asyncio.create_task(self._trigger_document_generation(task.task_id))
@@ -607,6 +712,9 @@ class TaskService:
             task.status = TaskStatusEnum.GENERATING
             self.db.commit()
             
+            # 发送WebSocket推送
+            await self._send_websocket_update(task, "generating_documents")
+            
             # 第一步：生成物流轨迹截图
             screenshot_success = await self._generate_tracking_screenshot(task)
             if not screenshot_success:
@@ -631,6 +739,14 @@ class TaskService:
                     
                     # 立即提交状态更新
                     self.db.commit()
+                    
+                    # 发送WebSocket推送
+                    await self._send_websocket_update(task, "task_completed", {
+                        "document_url": task.document_url,
+                        "screenshot_url": task.screenshot_url,
+                        "processing_time": task.processing_time
+                    })
+                    
                     print(f"✓ 任务完成并提交到数据库 - 任务: {task.task_id}, 状态: {task.status.value}")
                 else:
                     # 最终文档生成失败，但保留已生成的文件信息

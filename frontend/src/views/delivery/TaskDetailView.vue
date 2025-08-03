@@ -6,6 +6,15 @@
         <div class="header-left">
           <h2>任务详情</h2>
           <p class="task-id">任务ID: {{ taskInfo.task_id }}</p>
+          <div class="connection-status">
+            <el-tag 
+              v-if="wsClient" 
+              :type="wsClient.connectionStatus.value.connected ? 'success' : 'warning'"
+              size="small"
+            >
+              {{ wsClient.connectionStatus.value.connected ? '实时连接' : '连接中...' }}
+            </el-tag>
+          </div>
         </div>
         <div class="header-right">
           <el-tag 
@@ -507,6 +516,7 @@ import { tasksApi } from '@/api/tasks'
 import { deliveryApi } from '@/api/delivery'
 import { useDeliveryStore } from '@/stores/delivery'
 import { useAuthStore } from '@/stores/auth'
+import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
 
 const route = useRoute()
 const router = useRouter()  
@@ -534,6 +544,9 @@ const generating = ref(false)
 const retrying = ref(false)
 const deleting = ref(false)
 const formRef = ref<FormInstance>()
+
+// WebSocket客户端
+let wsClient: ReturnType<typeof useWebSocket> | null = null
 
 // 表单数据
 const formData = reactive({
@@ -931,8 +944,6 @@ const handleRetry = async () => {
       ElMessage.success('任务重试已启动，请稍候查看处理结果')
       // 重新获取任务详情
       await fetchTaskDetail(taskInfo.value.task_id)
-      // 重启自动刷新
-      startAutoRefresh(taskInfo.value.task_id)
     } else {
       throw new Error(response.message || '重试失败')
     }
@@ -992,25 +1003,77 @@ const handleBack = () => {
   router.push('/app/delivery/list')
 }
 
-// 自动刷新任务详情
-let refreshTimer: number | null = null
-
-const startAutoRefresh = (taskId: string) => {
-  refreshTimer = window.setInterval(() => {
-    // 只有在任务还在处理中时才自动刷新
-    if (['pending', 'recognizing', 'tracking', 'delivered', 'generating'].includes(taskInfo.value.status)) {
-      fetchTaskDetail(taskId)
+// WebSocket连接和消息处理
+const initWebSocket = (taskId: string) => {
+  const token = authStore.token
+  if (!token) {
+    console.warn('未找到认证token，无法建立WebSocket连接')
+    return
+  }
+  
+  wsClient = useWebSocket(token)
+  if (!wsClient) {
+    console.error('WebSocket客户端创建失败')
+    return
+  }
+  
+  // 监听连接状态变化
+  wsClient.onConnectionChange((connected: boolean) => {
+    if (connected) {
+      console.log('WebSocket连接成功')
+      // 订阅当前任务的更新
+      wsClient?.subscribeToTask(taskId)
     } else {
-      // 任务已完成或失败，停止自动刷新
-      stopAutoRefresh()
+      console.log('WebSocket连接断开')
     }
-  }, 5000) // 每5秒刷新一次
+  })
+  
+  // 监听任务状态更新
+  wsClient.on('task_update', handleTaskUpdate)
+  wsClient.on('status_changed', handleTaskUpdate)
+  wsClient.on('recognition_started', handleTaskUpdate)
+  wsClient.on('recognition_completed', handleTaskUpdate)
+  wsClient.on('recognition_failed', handleTaskUpdate)
+  wsClient.on('tracking_started', handleTaskUpdate)
+  wsClient.on('package_delivered', handleTaskUpdate)
+  wsClient.on('generating_documents', handleTaskUpdate)
+  wsClient.on('task_completed', handleTaskUpdate)
+  
+  // 建立连接
+  wsClient.connect()
 }
 
-const stopAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
+const handleTaskUpdate = (message: WebSocketMessage) => {
+  console.log('收到任务更新:', message)
+  
+  const taskId = message.task_id
+  if (!taskId || taskId !== taskInfo.value.task_id) return
+  
+  // 更新任务信息
+  if (message.status) {
+    taskInfo.value.status = message.status
+  }
+  
+  // 合并新数据
+  if (message.data) {
+    Object.assign(taskInfo.value, message.data)
+  }
+  
+  // 显示状态更新消息
+  if (message.message) {
+    ElMessage.info(`任务更新: ${message.message}`)
+  }
+  
+  // 如果状态为已完成，可能需要刷新表单数据
+  if (message.status === 'completed' && message.data?.document_url) {
+    ElMessage.success('文档生成完成！')
+  }
+}
+
+const cleanupWebSocket = () => {
+  if (wsClient) {
+    wsClient.disconnect()
+    wsClient = null
   }
 }
 
@@ -1019,16 +1082,16 @@ onMounted(() => {
   const taskId = route.params.id as string
   if (taskId) {
     fetchTaskDetail(taskId)
-    startAutoRefresh(taskId)
+    initWebSocket(taskId)
   } else {
     ElMessage.error('任务ID不存在')
     router.push('/app/delivery/list')
   }
 })
 
-// 组件卸载时停止自动刷新
+// 组件卸载时清理WebSocket连接
 onUnmounted(() => {
-  stopAutoRefresh()
+  cleanupWebSocket()
 })
 </script>
 
@@ -1056,7 +1119,11 @@ onUnmounted(() => {
 .task-id {
   color: #666;
   font-size: 14px;
-  margin: 0;
+  margin: 0 0 10px 0;
+}
+
+.connection-status {
+  margin-top: 5px;
 }
 
 .header-right {

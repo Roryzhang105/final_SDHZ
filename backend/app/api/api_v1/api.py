@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.api_v1.endpoints import auth, users, delivery_receipts, tracking, upload, qr_recognition, qr_generation, file_management, tasks, dashboard
+from app.api.api_v1.websocket import ws_router
 
 api_router = APIRouter()
 
@@ -14,3 +15,4 @@ api_router.include_router(qr_generation.router, prefix="/qr-generation", tags=["
 api_router.include_router(file_management.router, prefix="/files", tags=["文件管理"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["仪表盘"])
+api_router.include_router(ws_router, tags=["WebSocket"])

@@ -3,7 +3,18 @@
     <el-card class="filter-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>任务列表</span>
+          <div class="header-left">
+            <span>任务列表</span>
+            <div class="connection-status">
+              <el-tag 
+                v-if="wsClient" 
+                :type="wsClient.connectionStatus.value.connected ? 'success' : 'warning'"
+                size="small"
+              >
+                {{ wsClient.connectionStatus.value.connected ? '实时连接' : '连接中...' }}
+              </el-tag>
+            </div>
+          </div>
           <el-button type="primary" :icon="Upload" @click="handleUploadNew">
             上传新图片
           </el-button>
@@ -240,15 +251,20 @@ import {
   Picture
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
+import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // 响应式数据
 const loading = ref(false)
 const dialogVisible = ref(false)
 const tableData = ref([])
 const currentTask = ref(null)
-let refreshTimer: number | null = null
+
+// WebSocket客户端
+let wsClient: ReturnType<typeof useWebSocket> | null = null
 
 // 筛选表单
 const filterForm = reactive({
@@ -424,35 +440,96 @@ const handleCloseDialog = () => {
   currentTask.value = null
 }
 
-// 自动刷新任务状态
-const startAutoRefresh = () => {
-  refreshTimer = window.setInterval(() => {
-    // 只有在有处理中的任务时才自动刷新
-    const hasProcessingTasks = tableData.value.some((task: any) => 
-      ['pending', 'recognizing', 'tracking', 'generating'].includes(task.status)
-    )
-    if (hasProcessingTasks) {
-      fetchList()
+// WebSocket连接和消息处理
+const initWebSocket = () => {
+  const token = authStore.token
+  if (!token) {
+    console.warn('未找到认证token，无法建立WebSocket连接')
+    return
+  }
+  
+  wsClient = useWebSocket(token)
+  if (!wsClient) {
+    console.error('WebSocket客户端创建失败')
+    return
+  }
+  
+  // 监听连接状态变化
+  wsClient.onConnectionChange((connected: boolean) => {
+    if (connected) {
+      console.log('WebSocket连接成功')
+      ElMessage.success('实时连接已建立')
+    } else {
+      console.log('WebSocket连接断开')
+      ElMessage.warning('实时连接已断开，正在尝试重连...')
     }
-  }, 10000) // 每10秒刷新一次
+  })
+  
+  // 监听任务状态更新
+  wsClient.on('task_update', handleTaskUpdate)
+  wsClient.on('status_changed', handleTaskUpdate)
+  wsClient.on('recognition_started', handleTaskUpdate)
+  wsClient.on('recognition_completed', handleTaskUpdate)
+  wsClient.on('recognition_failed', handleTaskUpdate)
+  wsClient.on('tracking_started', handleTaskUpdate)
+  wsClient.on('package_delivered', handleTaskUpdate)
+  wsClient.on('generating_documents', handleTaskUpdate)
+  wsClient.on('task_completed', handleTaskUpdate)
+  
+  // 建立连接
+  wsClient.connect()
 }
 
-const stopAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
+const handleTaskUpdate = (message: WebSocketMessage) => {
+  console.log('收到任务更新:', message)
+  
+  const taskId = message.task_id
+  if (!taskId) return
+  
+  // 查找并更新对应的任务
+  const taskIndex = tableData.value.findIndex((task: any) => task.task_id === taskId)
+  if (taskIndex !== -1) {
+    // 更新现有任务
+    const updatedTask = {
+      ...tableData.value[taskIndex],
+      status: message.status || tableData.value[taskIndex].status,
+      progress: message.progress || getProgressPercentage(message.status || tableData.value[taskIndex].status),
+      ...message.data
+    }
+    tableData.value[taskIndex] = updatedTask
+    
+    // 如果当前查看的是这个任务，也更新详情
+    if (currentTask.value && currentTask.value.task_id === taskId) {
+      currentTask.value = updatedTask
+    }
+    
+    // 显示状态更新消息
+    if (message.message) {
+      ElMessage.info(`${taskId}: ${message.message}`)
+    }
+  } else {
+    // 如果是新任务，重新获取列表
+    console.log('检测到新任务，刷新列表')
+    fetchList()
   }
 }
 
-// 组件挂载时获取数据并开始自动刷新
+const cleanupWebSocket = () => {
+  if (wsClient) {
+    wsClient.disconnect()
+    wsClient = null
+  }
+}
+
+// 组件挂载时获取数据并初始化WebSocket
 onMounted(() => {
   fetchList()
-  startAutoRefresh()
+  initWebSocket()
 })
 
-// 组件卸载时停止自动刷新
+// 组件卸载时清理WebSocket连接
 onUnmounted(() => {
-  stopAutoRefresh()
+  cleanupWebSocket()
 })
 </script>
 
@@ -468,6 +545,17 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.connection-status {
+  display: flex;
   align-items: center;
 }
 
