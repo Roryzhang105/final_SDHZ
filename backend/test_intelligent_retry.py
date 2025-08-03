@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 class MockHTTPError(HTTPError):
     """模拟HTTP错误"""
     def __init__(self, status_code: int, message: str = "HTTP Error"):
-        self.response = type('MockResponse', (), {'status_code': status_code})()
         super().__init__(message)
+        self.response = type('MockResponse', (), {'status_code': status_code})()
 
 
 class RetrySystemTester:

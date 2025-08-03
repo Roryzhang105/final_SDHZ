@@ -160,23 +160,23 @@ class IntelligentRetryHandler:
         Returns:
             错误分类
         """
-        # 首先检查精确匹配
-        exc_type = type(exc)
-        if exc_type in ERROR_CLASSIFICATION:
-            category = ERROR_CLASSIFICATION[exc_type]
-        else:
-            # 检查继承关系
-            category = ErrorCategory.TEMPORARY_ERROR
-            for error_type, error_category in ERROR_CLASSIFICATION.items():
-                if isinstance(exc, error_type):
-                    category = error_category
-                    break
-        
-        # 特殊处理HTTP错误
+        # 特殊处理HTTP错误（优先级最高）
         if isinstance(exc, HTTPError):
             category = self._classify_http_error(exc)
+        else:
+            # 首先检查精确匹配
+            exc_type = type(exc)
+            if exc_type in ERROR_CLASSIFICATION:
+                category = ERROR_CLASSIFICATION[exc_type]
+            else:
+                # 检查继承关系
+                category = ErrorCategory.TEMPORARY_ERROR
+                for error_type, error_category in ERROR_CLASSIFICATION.items():
+                    if isinstance(exc, error_type):
+                        category = error_category
+                        break
         
-        # 检查错误消息中的关键词
+        # 检查错误消息中的关键词（优先级最高）
         error_msg = str(exc).lower()
         if any(keyword in error_msg for keyword in ['rate limit', 'too many requests', 'quota exceeded']):
             category = ErrorCategory.API_RATE_LIMIT
@@ -185,7 +185,7 @@ class IntelligentRetryHandler:
         elif any(keyword in error_msg for keyword in ['invalid', 'malformed', 'corrupt']):
             category = ErrorCategory.DATA_ERROR
         
-        logger.debug(f"错误分类: {exc_type.__name__} -> {category.value}")
+        logger.debug(f"错误分类: {type(exc).__name__} -> {category.value}")
         return category
     
     def _classify_http_error(self, exc: HTTPError) -> ErrorCategory:
@@ -212,11 +212,12 @@ class IntelligentRetryHandler:
             
             # 5xx服务器错误
             elif 500 <= status_code < 600:
-                if status_code in [502, 503, 504]:  # 临时服务器问题
+                if status_code in [500, 502, 503, 504]:  # 临时服务器问题
                     return ErrorCategory.TEMPORARY_ERROR
                 else:
                     return ErrorCategory.SYSTEM_ERROR
         
+        # 如果没有response或status_code，默认为临时错误
         return ErrorCategory.TEMPORARY_ERROR
     
     def should_retry(self, exc: Exception, retry_count: int, task_name: str = None) -> Tuple[bool, RetryStrategy]:

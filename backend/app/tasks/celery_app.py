@@ -28,7 +28,7 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=False,
     beat_schedule=beat_schedule,
-    beat_scheduler='django_celery_beat.schedulers:DatabaseScheduler',  # 使用数据库调度器
+    # beat_scheduler='celery.beat:PersistentScheduler',  # 使用文件调度器
     task_routes=TASK_ROUTES,
     # 任务执行相关配置
     task_always_eager=False,

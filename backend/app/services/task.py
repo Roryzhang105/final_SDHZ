@@ -573,7 +573,7 @@ class TaskService:
                 print(f"所有文件生成步骤都失败 - 任务: {task.task_id}")
             
             # 如果状态不是成功，则提交失败状态
-            transaction.commit()
+            self.db.commit()
             print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
         except DetachedInstanceError as e:

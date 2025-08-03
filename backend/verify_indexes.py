@@ -141,11 +141,11 @@ def test_query_performance():
     test_queries = [
         {
             "name": "按状态查询任务",
-            "query": "SELECT COUNT(*) FROM tasks WHERE status = 'pending'"
+            "query": "SELECT COUNT(*) FROM tasks WHERE status = 'PENDING'"
         },
         {
             "name": "按状态和创建时间查询任务",
-            "query": "SELECT * FROM tasks WHERE status = 'completed' AND created_at > NOW() - INTERVAL '7 days'"
+            "query": "SELECT * FROM tasks WHERE status = 'COMPLETED' AND created_at > NOW() - INTERVAL '7 days'"
         },
         {
             "name": "按快递单号查询送达回证",
