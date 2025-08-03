@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # 微信相关配置
     WECHAT_APP_ID: str = ""
     WECHAT_APP_SECRET: str = ""
+    WECHAT_TOKEN: str = ""
+    WECHAT_ENCODING_AES_KEY: str = ""
 
     def get_cors_origins(self) -> List[str]:
         """获取CORS源列表"""
