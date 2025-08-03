@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.services.task import TaskService
 from app.core.config import settings
 from app.models.task import TaskStatusEnum
+from app.api.api_v1.endpoints.auth import get_admin_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -339,16 +341,25 @@ async def check_task_progress(
 @router.delete("/{task_id}")
 async def delete_task(
     task_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user)
 ):
     """
-    删除任务
+    删除任务（仅管理员）
+    
+    Args:
+        task_id: 任务ID
+        db: 数据库会话
+        admin_user: 管理员用户（自动验证权限）
+    
+    Returns:
+        删除结果
     """
     service = TaskService(db)
-    success = service.delete_task(task_id)
+    success = service.delete_task(task_id, admin_user.id)
     
     if not success:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="任务不存在或删除失败")
     
     return {
         "success": True,

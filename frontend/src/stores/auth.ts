@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   // 计算属性
   const isAuthenticated = computed(() => !!token.value)
   const userInfo = computed(() => user.value)
+  const isAdmin = computed(() => user.value?.is_superuser || false)
 
   // 检查token是否可能过期（简单的时间戳检查）
   const isTokenExpired = (tokenString?: string): boolean => {
@@ -193,6 +194,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 计算属性
     isAuthenticated,
     userInfo,
+    isAdmin,
     
     // 方法
     initializeAuth,

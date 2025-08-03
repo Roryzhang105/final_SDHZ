@@ -470,6 +470,17 @@
         <el-icon><FolderOpened /></el-icon>
         下载所有文件
       </el-button>
+
+      <el-button 
+        v-if="authStore.isAdmin"
+        type="danger" 
+        size="large"
+        :loading="deleting"
+        @click="handleDeleteTask"
+      >
+        <el-icon><Delete /></el-icon>
+        删除任务
+      </el-button>
     </div>
   </div>
 </template>
@@ -489,15 +500,18 @@ import {
   Camera,
   ArrowLeft,
   FolderOpened,
-  Refresh
+  Refresh,
+  Delete
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
 import { deliveryApi } from '@/api/delivery'
 import { useDeliveryStore } from '@/stores/delivery'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
-const router = useRouter()
+const router = useRouter()  
 const deliveryStore = useDeliveryStore()
+const authStore = useAuthStore()
 
 // 响应式数据
 const taskInfo = ref({
@@ -518,6 +532,7 @@ const isEditing = ref(false)
 const saving = ref(false)
 const generating = ref(false)
 const retrying = ref(false)
+const deleting = ref(false)
 const formRef = ref<FormInstance>()
 
 // 表单数据
@@ -932,6 +947,46 @@ const handleRetry = async () => {
   }
 }
 
+// 删除任务
+const handleDeleteTask = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除这个任务吗？此操作将永久删除任务及其相关的所有文件，无法恢复。',
+      '危险操作确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'error',
+        customClass: 'delete-confirm-dialog'
+      }
+    )
+    
+    deleting.value = true
+    
+    // 调用删除API
+    await tasksApi.deleteTask(taskInfo.value.task_id)
+    
+    ElMessage.success('任务删除成功')
+    
+    // 返回任务列表
+    router.push('/app/delivery/list')
+    
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除任务失败:', error)
+      if (error.response?.status === 403) {
+        ElMessage.error('权限不足，仅管理员可删除任务')
+      } else if (error.response?.data?.detail) {
+        ElMessage.error(`删除失败: ${error.response.data.detail}`)
+      } else {
+        ElMessage.error('删除任务失败，请稍后再试')
+      }
+    }
+  } finally {
+    deleting.value = false
+  }
+}
+
 // 返回列表
 const handleBack = () => {
   router.push('/app/delivery/list')
@@ -1246,6 +1301,28 @@ onUnmounted(() => {
   .action-buttons .el-button {
     width: 100%;
     max-width: 300px;
+  }
+}
+
+/* 删除确认对话框样式 */
+:deep(.delete-confirm-dialog) {
+  .el-message-box__title {
+    color: #f56c6c;
+  }
+  
+  .el-message-box__message {
+    color: #606266;
+    font-weight: 500;
+  }
+  
+  .el-button--primary {
+    background-color: #f56c6c;
+    border-color: #f56c6c;
+  }
+  
+  .el-button--primary:hover {
+    background-color: #f78989;
+    border-color: #f78989;
   }
 }
 </style>

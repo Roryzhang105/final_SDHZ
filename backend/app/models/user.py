@@ -16,3 +16,4 @@ class User(BaseModel):
     
     # 关联关系
     delivery_receipts = relationship("DeliveryReceipt", back_populates="user")
+    activity_logs = relationship("ActivityLog", back_populates="user")

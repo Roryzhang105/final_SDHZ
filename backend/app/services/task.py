@@ -256,15 +256,22 @@ class TaskService:
         
         return True
     
-    def delete_task(self, task_id: str) -> bool:
-        """删除任务"""
+    def delete_task(self, task_id: str, admin_user_id: Optional[int] = None) -> bool:
+        """删除任务（管理员操作）"""
         try:
             task = self.get_task_by_id(task_id)
             if not task:
                 return False
             
+            # 记录删除操作日志
+            if admin_user_id:
+                self._log_task_deletion(task, admin_user_id)
+            
             # 删除相关文件
             self._cleanup_task_files(task)
+            
+            # 删除相关的送达回证记录
+            self._cleanup_delivery_receipt(task)
             
             # 删除数据库记录
             self.db.delete(task)
@@ -278,18 +285,92 @@ class TaskService:
     
     def _cleanup_task_files(self, task: Task):
         """清理任务相关文件"""
-        files_to_remove = [
-            task.image_path,
-            task.document_path,
-            task.screenshot_path
-        ]
+        files_to_remove = []
         
+        # 基本文件路径
+        if task.image_path:
+            files_to_remove.append(task.image_path)
+        if task.document_path:
+            files_to_remove.append(task.document_path)
+        if task.screenshot_path:
+            files_to_remove.append(task.screenshot_path)
+        
+        # QR标签文件（从extra_metadata中获取）
+        if task.extra_metadata and task.extra_metadata.get("qr_label_path"):
+            files_to_remove.append(task.extra_metadata["qr_label_path"])
+        
+        # 基于tracking_number的相关文件
+        if task.tracking_number:
+            tracking_number = task.tracking_number
+            
+            # 快递缓存文件
+            express_cache_patterns = [
+                f"uploads/express_cache/ems_{tracking_number}.json",
+                f"uploads/express_cache/sf_{tracking_number}.json",
+                f"uploads/express_cache/sto_{tracking_number}.json"
+            ]
+            
+            # 送达回证文档
+            delivery_receipt_pattern = f"uploads/delivery_receipts/delivery_receipt_{tracking_number}_*.docx"
+            
+            # 物流截图
+            tracking_screenshot_pattern = f"uploads/tracking_screenshots/tracking_{tracking_number}_*.png"
+            
+            # QR标签
+            qr_label_pattern = f"uploads/label_{tracking_number}_*_final.png"
+            
+            # 物流HTML文件
+            tracking_html_pattern = f"uploads/tracking_html/tracking_{tracking_number}_*.html"
+            
+            # 添加模式匹配的文件
+            import glob
+            for pattern in [delivery_receipt_pattern, tracking_screenshot_pattern, 
+                          qr_label_pattern, tracking_html_pattern]:
+                files_to_remove.extend(glob.glob(pattern))
+            
+            # 添加确定路径的文件
+            files_to_remove.extend(express_cache_patterns)
+        
+        # 删除文件
         for file_path in files_to_remove:
             if file_path and os.path.exists(file_path):
                 try:
                     os.remove(file_path)
+                    print(f"删除文件: {file_path}")
                 except Exception as e:
-                    print(f"Failed to remove file {file_path}: {e}")
+                    print(f"删除文件失败 {file_path}: {e}")
+    
+    def _cleanup_delivery_receipt(self, task: Task):
+        """删除相关的送达回证记录"""
+        if task.tracking_number:
+            try:
+                from app.models.delivery_receipt import DeliveryReceipt
+                receipt = self.db.query(DeliveryReceipt).filter(
+                    DeliveryReceipt.tracking_number == task.tracking_number
+                ).first()
+                
+                if receipt:
+                    self.db.delete(receipt)
+                    print(f"删除送达回证记录: {task.tracking_number}")
+            except Exception as e:
+                print(f"删除送达回证记录失败: {e}")
+    
+    def _log_task_deletion(self, task: Task, admin_user_id: int):
+        """记录任务删除日志"""
+        try:
+            from app.services.activity_log import ActivityLogService
+            activity_service = ActivityLogService(self.db)
+            
+            activity_service.log_activity(
+                action_type="task_deleted",
+                description=f"管理员删除任务 #{task.task_id}，快递单号: {task.tracking_number or '未知'}",
+                entity_type="task",
+                entity_id=task.task_id,
+                status="warning",
+                user_id=admin_user_id
+            )
+        except Exception as e:
+            print(f"记录删除日志失败: {e}")
     
     def get_task_statistics(self, user_id: Optional[int] = None) -> Dict[str, int]:
         """获取任务统计信息 - 优化版本，避免N+1查询"""

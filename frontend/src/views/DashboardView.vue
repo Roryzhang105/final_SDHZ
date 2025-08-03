@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { 
   Document, 
   Check, 
@@ -135,58 +135,63 @@ import {
   Refresh
 } from '@element-plus/icons-vue'
 import { useDeliveryStore } from '@/stores/delivery'
+import { dashboardApi } from '@/api'
+import { ElMessage } from 'element-plus'
 
 const deliveryStore = useDeliveryStore()
 
-// 模拟统计数据
+// 统计数据
 const totalReceipts = ref(0)
 const completedReceipts = ref(0)
 const pendingReceipts = ref(0)
 const failedReceipts = ref(0)
+const loading = ref(false)
 
-// 模拟最近活动数据
-const recentActivities = ref([
-  {
-    id: 1,
-    description: '任务 #1151242358360 处理完成，送达回证已生成',
-    time: '2024-01-30 14:30:00',
-    type: 'success'
-  },
-  {
-    id: 2,
-    description: '任务 #1151240728560 开始处理，正在识别二维码',
-    time: '2024-01-30 13:45:00',
-    type: 'primary'
-  },
-  {
-    id: 3,
-    description: '新任务 #1151238971060 已创建，等待处理',
-    time: '2024-01-30 12:20:00',
-    type: 'info'
-  },
-  {
-    id: 4,
-    description: '任务 #1151235647120 处理失败，二维码识别异常',
-    time: '2024-01-30 11:15:00',
-    type: 'warning'
-  }
-])
+// 最近活动数据
+const recentActivities = ref<any[]>([])
+
+// 自动刷新定时器
+let refreshTimer: NodeJS.Timeout | null = null
 
 // 加载数据
 const loadData = async () => {
+  if (loading.value) return
+  
+  loading.value = true
   try {
-    await deliveryStore.getReceiptList()
+    const response = await dashboardApi.getStats()
     
-    // 计算统计数据
-    const receipts = deliveryStore.receipts
-    totalReceipts.value = receipts.length
-    
-    // 根据实际状态统计
-    completedReceipts.value = receipts.filter(r => r.status === 'completed').length
-    pendingReceipts.value = receipts.filter(r => r.status === 'pending').length
-    failedReceipts.value = receipts.filter(r => r.status === 'failed').length
+    if (response.success && response.data) {
+      const { statistics, recent_activities } = response.data
+      
+      // 更新统计数据
+      totalReceipts.value = statistics.total_receipts
+      completedReceipts.value = statistics.completed_receipts
+      pendingReceipts.value = statistics.pending_receipts
+      failedReceipts.value = statistics.failed_receipts
+      
+      // 更新最近活动
+      recentActivities.value = recent_activities || []
+    } else {
+      throw new Error(response.message || '获取数据失败')
+    }
   } catch (error) {
     console.error('Failed to load dashboard data:', error)
+    ElMessage.error('加载仪表盘数据失败')
+    
+    // 如果API失败，尝试使用旧的方法作为备用
+    try {
+      await deliveryStore.getReceiptList()
+      const receipts = deliveryStore.receipts
+      totalReceipts.value = receipts.length
+      completedReceipts.value = receipts.filter(r => r.status === 'completed').length
+      pendingReceipts.value = receipts.filter(r => r.status === 'pending').length
+      failedReceipts.value = receipts.filter(r => r.status === 'failed').length
+    } catch (fallbackError) {
+      console.error('Fallback data loading also failed:', fallbackError)
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -195,8 +200,34 @@ const refreshData = () => {
   loadData()
 }
 
+// 启动自动刷新
+const startAutoRefresh = () => {
+  // 清理之前的定时器
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+  
+  // 每30秒刷新一次
+  refreshTimer = setInterval(() => {
+    loadData()
+  }, 30000)
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
 onMounted(() => {
   loadData()
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -258,6 +289,7 @@ onMounted(() => {
   gap: 10px;
   width: 100%;
   max-width: 300px;
+  margin: 0 auto;
 }
 
 .upload-description {

@@ -36,6 +36,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """获取当前管理员用户（仅管理员可访问）"""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="管理员权限不足"
+        )
+    return current_user
+
+
 @router.post("/login", response_model=ApiResponse)
 async def login_json(
     login_data: LoginRequest,

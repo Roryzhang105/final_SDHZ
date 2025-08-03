@@ -40,48 +40,39 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/DashboardView.vue'),
         meta: {
           title: '仪表盘',
-          icon: 'Dashboard',
+          icon: 'Odometer',
           requiresAuth: true
         }
       },
       {
-        path: 'delivery',
-        name: 'Delivery',
+        path: 'delivery/generate',
+        name: 'DeliveryGenerate',
+        component: () => import('@/views/delivery/GenerateView.vue'),
         meta: {
-          title: '送达回证',
-          icon: 'Document',
+          title: '上传图片',
+          icon: 'Camera',
           requiresAuth: true
-        },
-        children: [
-          {
-            path: 'generate',
-            name: 'DeliveryGenerate',
-            component: () => import('@/views/delivery/GenerateView.vue'),
-            meta: {
-              title: '上传图片',
-              requiresAuth: true
-            }
-          },
-          {
-            path: 'list',
-            name: 'DeliveryList',
-            component: () => import('@/views/delivery/ListView.vue'),
-            meta: {
-              title: '任务列表',
-              requiresAuth: true
-            }
-          },
-          {
-            path: 'detail/:id',
-            name: 'TaskDetail',
-            component: () => import('@/views/delivery/TaskDetailView.vue'),
-            meta: {
-              title: '任务详情',
-              requiresAuth: true,
-              hideInMenu: true
-            }
-          }
-        ]
+        }
+      },
+      {
+        path: 'delivery/list',
+        name: 'DeliveryList',
+        component: () => import('@/views/delivery/ListView.vue'),
+        meta: {
+          title: '任务列表',
+          icon: 'List',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'delivery/detail/:id',
+        name: 'TaskDetail',
+        component: () => import('@/views/delivery/TaskDetailView.vue'),
+        meta: {
+          title: '任务详情',
+          requiresAuth: true,
+          hideInMenu: true
+        }
       }
     ]
   },

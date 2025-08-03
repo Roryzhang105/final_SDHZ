@@ -131,7 +131,11 @@ import {
   User,
   Setting,
   SwitchButton,
-  ArrowDown
+  ArrowDown,
+  Odometer,
+  Camera,
+  List,
+  Document
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
