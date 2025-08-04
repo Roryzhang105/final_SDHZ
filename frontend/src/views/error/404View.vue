@@ -39,7 +39,7 @@
       <h3>快速导航</h3>
       <div class="links-grid">
         <router-link to="/dashboard" class="quick-link">
-          <el-icon><Dashboard /></el-icon>
+          <el-icon><HomeFilled /></el-icon>
           <span>仪表盘</span>
         </router-link>
         <router-link to="/delivery/generate" class="quick-link">
@@ -62,7 +62,7 @@ import {
   House,
   Back,
   Refresh,
-  Dashboard,
+  HomeFilled,
   Document,
   Grid
 } from '@element-plus/icons-vue'

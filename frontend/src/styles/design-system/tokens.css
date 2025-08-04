@@ -1,0 +1,232 @@
+/**
+ * Design Tokens - 设计令牌
+ * 定义系统中所有设计元素的基础值
+ */
+
+:root {
+  /* ========== 色彩系统 ========== */
+  
+  /* 主色调 */
+  --color-primary: #5e72e4;
+  --color-primary-light: #7c8ce6;
+  --color-primary-lighter: #9aa1e8;
+  --color-primary-lightest: #b8b6ea;
+  --color-primary-dark: #4c5ac7;
+  --color-primary-darker: #3a42aa;
+  --color-primary-darkest: #282a8d;
+  
+  /* 语义色彩 */
+  --color-success: #2dce89;
+  --color-success-light: #4dd9a4;
+  --color-success-dark: #26b876;
+  
+  --color-warning: #fb6340;
+  --color-warning-light: #fc7d5f;
+  --color-warning-dark: #e74c3c;
+  
+  --color-danger: #f5365c;
+  --color-danger-light: #f75676;
+  --color-danger-dark: #dc2743;
+  
+  --color-info: #11cdef;
+  --color-info-light: #3ad5f1;
+  --color-info-dark: #0fb9d4;
+  
+  /* 中性色彩 */
+  --color-white: #ffffff;
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-black: #000000;
+  
+  /* 背景色彩 */
+  --color-bg-primary: var(--color-white);
+  --color-bg-secondary: var(--color-gray-50);
+  --color-bg-tertiary: var(--color-gray-100);
+  --color-bg-overlay: rgba(15, 23, 42, 0.5);
+  
+  /* 渐变背景 */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-secondary: linear-gradient(135deg, #5e72e4 0%, #3b4acf 100%);
+  --gradient-success: linear-gradient(135deg, #2dce89 0%, #26b876 100%);
+  --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  --gradient-glass: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1));
+  
+  /* 温和的页面背景渐变 */
+  --gradient-page-light: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  --gradient-page-neutral: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  
+  /* ========== 空间系统 ========== */
+  
+  /* 间距 */
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-5: 1.25rem;   /* 20px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  --spacing-10: 2.5rem;   /* 40px */
+  --spacing-12: 3rem;     /* 48px */
+  --spacing-16: 4rem;     /* 64px */
+  --spacing-20: 5rem;     /* 80px */
+  --spacing-24: 6rem;     /* 96px */
+  --spacing-32: 8rem;     /* 128px */
+  
+  /* ========== 字体系统 ========== */
+  
+  /* 字体族 */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  
+  /* 字体大小 */
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3rem;      /* 48px */
+  
+  /* 字体粗细 */
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  
+  /* 行高 */
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+  --line-height-loose: 2;
+  
+  /* ========== 形状系统 ========== */
+  
+  /* 圆角 */
+  --radius-none: 0;
+  --radius-sm: 0.125rem;   /* 2px */
+  --radius-base: 0.25rem;  /* 4px */
+  --radius-md: 0.375rem;   /* 6px */
+  --radius-lg: 0.5rem;     /* 8px */
+  --radius-xl: 0.75rem;    /* 12px */
+  --radius-2xl: 1rem;      /* 16px */
+  --radius-3xl: 1.5rem;    /* 24px */
+  --radius-full: 9999px;
+  
+  /* ========== 阴影系统 ========== */
+  
+  /* 投影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  
+  /* 彩色阴影 */
+  --shadow-primary: 0 10px 15px -3px rgba(94, 114, 228, 0.2), 0 4px 6px -2px rgba(94, 114, 228, 0.1);
+  --shadow-success: 0 10px 15px -3px rgba(45, 206, 137, 0.2), 0 4px 6px -2px rgba(45, 206, 137, 0.1);
+  --shadow-warning: 0 10px 15px -3px rgba(251, 99, 64, 0.2), 0 4px 6px -2px rgba(251, 99, 64, 0.1);
+  --shadow-danger: 0 10px 15px -3px rgba(245, 54, 92, 0.2), 0 4px 6px -2px rgba(245, 54, 92, 0.1);
+  
+  /* ========== 动画系统 ========== */
+  
+  /* 动画时长 */
+  --duration-75: 75ms;
+  --duration-100: 100ms;
+  --duration-150: 150ms;
+  --duration-200: 200ms;
+  --duration-300: 300ms;
+  --duration-500: 500ms;
+  --duration-700: 700ms;
+  --duration-1000: 1000ms;
+  
+  /* 缓动函数 */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  
+  /* ========== 层级系统 ========== */
+  
+  /* Z-index */
+  --z-index-0: 0;
+  --z-index-10: 10;
+  --z-index-20: 20;
+  --z-index-30: 30;
+  --z-index-40: 40;
+  --z-index-50: 50;
+  --z-index-dropdown: 1000;
+  --z-index-sticky: 1020;
+  --z-index-fixed: 1030;
+  --z-index-modal-backdrop: 1040;
+  --z-index-modal: 1050;
+  --z-index-popover: 1060;
+  --z-index-tooltip: 1070;
+  --z-index-toast: 1080;
+  
+  /* ========== 响应式断点 ========== */
+  
+  --breakpoint-xs: 0px;
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1400px;
+  
+  /* ========== 特殊效果 ========== */
+  
+  /* 毛玻璃效果 */
+  --backdrop-blur: blur(12px);
+  --backdrop-blur-sm: blur(4px);
+  --backdrop-blur-lg: blur(24px);
+  
+  /* 边框 */
+  --border-width: 1px;
+  --border-width-2: 2px;
+  --border-width-4: 4px;
+  --border-width-8: 8px;
+  
+  --border-color: var(--color-gray-200);
+  --border-color-light: var(--color-gray-100);
+  --border-color-dark: var(--color-gray-300);
+  
+  /* 焦点环 */
+  --focus-ring: 0 0 0 3px rgba(94, 114, 228, 0.1);
+  --focus-ring-success: 0 0 0 3px rgba(45, 206, 137, 0.1);
+  --focus-ring-warning: 0 0 0 3px rgba(251, 99, 64, 0.1);
+  --focus-ring-danger: 0 0 0 3px rgba(245, 54, 92, 0.1);
+}
+
+/* ========== 深色主题变量 ========== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-primary: var(--color-gray-900);
+    --color-bg-secondary: var(--color-gray-800);
+    --color-bg-tertiary: var(--color-gray-700);
+    --color-bg-overlay: rgba(0, 0, 0, 0.5);
+    
+    --border-color: var(--color-gray-700);
+    --border-color-light: var(--color-gray-800);
+    --border-color-dark: var(--color-gray-600);
+    
+    --gradient-card: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(30, 41, 59, 0.7));
+    --gradient-glass: linear-gradient(145deg, rgba(30, 41, 59, 0.25), rgba(30, 41, 59, 0.1));
+  }
+}

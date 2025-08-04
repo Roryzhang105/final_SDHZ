@@ -1,27 +1,53 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy==2.0.23
-alembic==1.12.1
-celery[redis]==5.3.4
-redis==4.6.0
-python-multipart==0.0.6
+# Web框架和服务器
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# 数据库相关
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# 异步任务队列
+celery[redis]==5.4.0
+redis==5.2.0
+
+# 认证和安全
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
-pydantic==2.5.0
-pydantic-settings==2.1.0
-python-dotenv==1.0.0
-email-validator==2.1.0
-httpx==0.25.2
-qrcode[pil]==7.4.2
+bcrypt==4.2.1
+python-multipart==0.0.19
+
+# 数据验证和配置
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+email-validator==2.2.0
+
+# HTTP客户端
+httpx==0.28.1
+requests==2.32.3
+
+# 二维码和条形码
+qrcode[pil]==8.0
 python-barcode==0.15.1
-Pillow==10.1.0
-opencv-python==4.10.0.84
-numpy<2.0
 pyzbar==0.1.9
-python-docx==1.1.0
-requests==2.31.0
-selenium==4.15.2
-webdriver-manager==4.0.1
+
+# 图像处理
+Pillow==11.0.0
+opencv-python==4.10.0.84
+numpy==1.26.4
+
+# 文档处理
+python-docx==1.1.2
+
+# 浏览器自动化（截图功能）
+selenium==4.27.1
+webdriver-manager==4.0.2
+
+# 任务监控
 flower==2.0.1
-psycopg2-binary==2.9.9
+
+# 开发和调试
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0

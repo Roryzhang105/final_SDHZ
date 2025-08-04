@@ -3,28 +3,62 @@ version: '3.8'
 services:
   # PostgreSQL数据库
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: sdhz_postgres
     environment:
       POSTGRES_DB: delivery_receipt
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      PGTZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
+    command: >
+      postgres 
+      -c max_connections=200
+      -c shared_buffers=128MB
+      -c effective_cache_size=512MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c log_min_duration_statement=200ms
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      -c log_checkpoints=on
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_lock_waits=on
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d delivery_receipt"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
     networks:
       - sdhz_network
 
   # Redis缓存
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: sdhz_redis
+    command: >
+      redis-server 
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
     ports:
       - "6379:6379"
     volumes:
@@ -34,6 +68,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
     networks:
       - sdhz_network
 
@@ -52,9 +88,13 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=Asia/Shanghai
+      - PYTHONPATH=/app
+      - WORKERS=1
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app/utils/legacy:/app/app/utils/legacy
+      - /dev/shm:/dev/shm  # Chrome需要共享内存
     ports:
       - "8000:8000"
     depends_on:
@@ -67,6 +107,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+        reservations:
+          memory: 512MB
     networks:
       - sdhz_network
 
@@ -76,7 +124,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sdhz_celery_worker
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    command: >
+      celery -A app.tasks.celery_app worker 
+      --loglevel=info 
+      --concurrency=2
+      --max-tasks-per-child=1000
+      --time-limit=3600
+      --soft-time-limit=3300
     environment:
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=postgres
@@ -86,13 +140,26 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=Asia/Shanghai
+      - PYTHONPATH=/app
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app/utils/legacy:/app/app/utils/legacy
+      - /dev/shm:/dev/shm  # Chrome需要共享内存
     depends_on:
-      - redis
-      - postgres
-      - backend
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2GB
+        reservations:
+          memory: 512MB
     networks:
       - sdhz_network
 
@@ -105,12 +172,21 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128MB
+        reservations:
+          memory: 64MB
     networks:
       - sdhz_network
 
@@ -120,7 +196,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sdhz_celery_beat
-    command: celery -A app.tasks.celery_app beat --loglevel=info
+    command: >
+      celery -A app.tasks.celery_app beat 
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+      --pidfile=/tmp/celerybeat.pid
     environment:
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=postgres
@@ -130,38 +210,73 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=Asia/Shanghai
+      - PYTHONPATH=/app
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app/utils/legacy:/app/app/utils/legacy
+      - celery_beat_data:/tmp
     depends_on:
-      - redis
-      - postgres
-      - backend
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+        reservations:
+          memory: 128MB
     networks:
       - sdhz_network
 
-  # Celery任务监控（可选）
+  # Celery任务监控
   flower:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sdhz_flower
-    command: celery -A app.tasks.celery_app flower --port=5555
+    command: >
+      celery -A app.tasks.celery_app flower 
+      --port=5555
+      --basic_auth=admin:admin123
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TZ=Asia/Shanghai
     ports:
       - "5555:5555"
     depends_on:
-      - redis
-      - celery-worker
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+        reservations:
+          memory: 128MB
     networks:
       - sdhz_network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  celery_beat_data:
+    driver: local
 
 networks:
   sdhz_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: sdhz_br0

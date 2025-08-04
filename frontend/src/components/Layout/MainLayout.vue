@@ -3,7 +3,12 @@
     <!-- 侧边栏 -->
     <el-aside :width="sidebarCollapsed ? '64px' : '250px'" class="sidebar">
       <div class="logo-container">
-        <img v-if="!sidebarCollapsed" src="/favicon.ico" alt="Logo" class="logo" />
+        <div v-if="!sidebarCollapsed" class="logo-icon">
+          <el-icon size="28"><Van /></el-icon>
+        </div>
+        <div v-else class="logo-icon-collapsed">
+          <el-icon size="24"><Van /></el-icon>
+        </div>
         <h1 v-if="!sidebarCollapsed" class="app-title">送达回证系统</h1>
       </div>
       
@@ -13,9 +18,9 @@
         :unique-opened="true"
         router
         class="sidebar-menu"
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409EFF"
+        background-color="transparent"
+        text-color="#4a5568"
+        active-text-color="#5e72e4"
       >
         <template v-for="route in menuRoutes" :key="route.path">
           <!-- 有子菜单的路由 -->
@@ -135,7 +140,8 @@ import {
   Odometer,
   Camera,
   List,
-  Document
+  Document,
+  Van
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -251,26 +257,62 @@ watch(
 }
 
 .sidebar {
-  background-color: #304156;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
   transition: width 0.3s ease;
   overflow: hidden;
   flex-shrink: 0;
   position: relative;
   z-index: 100;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
 }
 
 .logo-container {
   display: flex;
   align-items: center;
   padding: 20px;
-  color: white;
-  border-bottom: 1px solid #434a50;
+  color: #2c3e50;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(94, 114, 228, 0.05);
 }
 
-.logo {
-  width: 32px;
-  height: 32px;
+.logo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   margin-right: 12px;
+  background: linear-gradient(135deg, #5e72e4, #825ee4);
+  border-radius: 10px;
+  color: white;
+  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.3);
+  transition: all 0.3s ease;
+}
+
+.logo-icon:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(94, 114, 228, 0.4);
+}
+
+.logo-icon-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #5e72e4, #825ee4);
+  border-radius: 8px;
+  color: white;
+  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.3);
+  transition: all 0.3s ease;
+}
+
+.logo-icon-collapsed:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(94, 114, 228, 0.4);
 }
 
 .app-title {
@@ -278,12 +320,17 @@ watch(
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
+  background: linear-gradient(135deg, #5e72e4, #825ee4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .sidebar-menu {
   border: none;
   height: calc(100vh - 80px);
   overflow-y: auto;
+  background: transparent;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
@@ -291,13 +338,14 @@ watch(
 }
 
 .header {
-  background: white;
-  border-bottom: 1px solid #e4e7ed;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .header-left {
@@ -308,10 +356,17 @@ watch(
 .sidebar-toggle {
   margin-right: 20px;
   color: #5a5e66;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
 }
 
 .sidebar-toggle:hover {
-  color: #409eff;
+  color: #5e72e4;
+  background: rgba(94, 114, 228, 0.1);
+  border-color: rgba(94, 114, 228, 0.2);
+  transform: scale(1.05);
 }
 
 .breadcrumb {
@@ -328,12 +383,16 @@ watch(
   align-items: center;
   cursor: pointer;
   padding: 8px 12px;
-  border-radius: 4px;
-  transition: background-color 0.3s;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
 }
 
 .user-dropdown:hover {
-  background-color: #f5f7fa;
+  background: rgba(94, 114, 228, 0.1);
+  border-color: rgba(94, 114, 228, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(94, 114, 228, 0.15);
 }
 
 .username {
@@ -419,11 +478,43 @@ watch(
 }
 
 .sidebar-menu::-webkit-scrollbar-thumb {
-  background-color: #a1a3a9;
+  background-color: rgba(94, 114, 228, 0.3);
   border-radius: 3px;
 }
 
 .sidebar-menu::-webkit-scrollbar-thumb:hover {
-  background-color: #85888e;
+  background-color: rgba(94, 114, 228, 0.5);
+}
+
+/* 菜单项现代化样式 */
+.sidebar-menu :deep(.el-menu-item),
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu__title) {
+  margin: 4px 12px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.sidebar-menu :deep(.el-menu-item:hover),
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu__title:hover) {
+  background: rgba(94, 114, 228, 0.1) !important;
+  border-color: rgba(94, 114, 228, 0.2);
+  transform: translateX(2px);
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(135deg, rgba(94, 114, 228, 0.15), rgba(130, 94, 228, 0.15)) !important;
+  border-color: rgba(94, 114, 228, 0.3);
+  color: #5e72e4 !important;
+  box-shadow: 0 2px 8px rgba(94, 114, 228, 0.2);
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item) {
+  margin: 2px 20px;
+  border-radius: 6px;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item:hover) {
+  background: rgba(94, 114, 228, 0.08) !important;
 }
 </style>

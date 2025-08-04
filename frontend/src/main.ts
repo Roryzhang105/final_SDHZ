@@ -1,3 +1,5 @@
+// 导入设计系统样式 - 必须在 Element Plus 之前
+import './styles/design-system/index.css'
 import './assets/main.css'
 
 import { createApp } from 'vue'

@@ -1,60 +1,242 @@
 @import './base.css';
 
-/* 确保页面完全占满屏幕 */
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
+/* ========== 应用程序级别样式 ========== */
+/* 这些样式与设计系统配合使用 */
 
 #app {
   width: 100%;
-  height: 100vh;
   min-height: 100vh;
-  margin: 0;
-  padding: 0;
-  font-weight: normal;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-family-sans);
+  background: var(--gradient-page-neutral);
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* 添加微妙的纹理背景 */
+#app::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(148,163,184,0.05)"/><circle cx="75" cy="75" r="1" fill="rgba(148,163,184,0.05)"/><circle cx="50" cy="10" r="0.5" fill="rgba(148,163,184,0.03)"/><circle cx="10" cy="60" r="0.5" fill="rgba(148,163,184,0.03)"/><circle cx="90" cy="40" r="0.5" fill="rgba(148,163,184,0.03)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 主要内容容器 */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+/* 页面过渡容器 */
+.page-transition-container {
+  flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-/* 页面内容区域 */
-.page-content {
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px;
-  flex: 1;
-}
-
-/* 全宽内容区域 */
-.page-content-full {
-  width: 100%;
-  padding: 20px;
-  flex: 1;
-}
-
-a,
-.green {
+/* 链接样式使用设计系统颜色 */
+a {
+  color: var(--color-primary);
   text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
+  transition: all var(--duration-200) var(--ease-out);
+  padding: var(--spacing-1);
+  border-radius: var(--radius-sm);
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
+a:hover {
+  color: var(--color-primary-dark);
+  background-color: rgba(94, 114, 228, 0.1);
+  transform: translateY(-1px);
+}
+
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.green {
+  color: var(--color-success);
+}
+
+.green:hover {
+  color: var(--color-success-dark);
+  background-color: rgba(45, 206, 137, 0.1);
+}
+
+/* ========== 滚动行为优化 ========== */
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .page-content {
-    padding: 10px;
+/* ========== 页面加载动画 ========== */
+.app-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-index-modal);
+  animation: fade-out var(--duration-500) var(--ease-out) forwards;
+  animation-delay: 1s;
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.app-loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+}
+
+/* ========== 状态指示器 ========== */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--duration-200) var(--ease-out);
+}
+
+.status-indicator::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-online {
+  background: rgba(45, 206, 137, 0.1);
+  color: var(--color-success-dark);
+  border: 1px solid rgba(45, 206, 137, 0.2);
+}
+
+.status-online::before {
+  background: var(--color-success);
+}
+
+.status-offline {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--color-gray-600);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.status-offline::before {
+  background: var(--color-gray-400);
+}
+
+.status-connecting {
+  background: rgba(251, 99, 64, 0.1);
+  color: var(--color-warning-dark);
+  border: 1px solid rgba(251, 99, 64, 0.2);
+}
+
+.status-connecting::before {
+  background: var(--color-warning);
+  animation: pulse 1s infinite;
+}
+
+/* ========== 功能特定样式 ========== */
+.feature-highlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-highlight::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: highlight-sweep 2s infinite;
+  animation-delay: 3s;
+}
+
+@keyframes highlight-sweep {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* ========== 无障碍增强 ========== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--color-primary);
+  color: white;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  z-index: var(--z-index-tooltip);
+  transition: top var(--duration-200) var(--ease-out);
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* ========== 打印样式 ========== */
+@media print {
+  .no-print {
+    display: none !important;
   }
   
-  .page-content-full {
-    padding: 10px;
+  #app {
+    background: white !important;
+  }
+  
+  #app::before {
+    display: none !important;
+  }
+  
+  * {
+    color: black !important;
+    background: white !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 }

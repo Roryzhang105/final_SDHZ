@@ -1,14 +1,17 @@
 # 多阶段构建 - 构建阶段
 FROM node:22.12-alpine AS builder
 
+# 安装必要的构建工具
+RUN apk add --no-cache python3 make g++
+
 # 设置工作目录
 WORKDIR /app
 
 # 复制package文件
 COPY package*.json ./
 
-# 安装依赖
-RUN npm ci --only=production --ignore-scripts
+# 安装依赖（包括开发依赖用于构建）
+RUN npm ci --include=dev --ignore-scripts
 
 # 复制源代码
 COPY . .
@@ -17,7 +20,7 @@ COPY . .
 RUN npm run build
 
 # 生产阶段 - 使用nginx提供静态文件服务
-FROM nginx:1.25-alpine AS production
+FROM nginx:1.27-alpine AS production
 
 # 复制nginx配置
 COPY <<EOF /etc/nginx/conf.d/default.conf

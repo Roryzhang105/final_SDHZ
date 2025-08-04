@@ -10,17 +10,23 @@
 ### Docker 构建
 ```bash
 # 构建所有服务
-docker-compose build
+docker compose build
 
 # 构建特定服务
-docker-compose build backend
-docker-compose build frontend
+docker compose build backend
+docker compose build frontend
 
 # 启动所有服务
-docker-compose up -d
+docker compose up -d
 
 # 查看服务状态
-docker-compose ps
+docker compose ps
+
+# 查看日志
+docker compose logs -f
+
+# 停止所有服务
+docker compose down
 ```
 
 ### 开发环境
