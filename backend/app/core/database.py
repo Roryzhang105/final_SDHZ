@@ -2,8 +2,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
-from typing import Generator
+from typing import Generator, AsyncGenerator
 import logging
+import asyncio
 
 from app.core.config import settings
 
@@ -43,7 +44,8 @@ SessionLocal = sessionmaker(
     autocommit=False, 
     autoflush=False, 
     bind=engine,
-    expire_on_commit=False  # 防止在事务提交后对象过期
+    expire_on_commit=False,  # 防止在事务提交后对象过期
+    class_=Session  # 明确使用标准Session类
 )
 
 Base = declarative_base()
@@ -81,12 +83,19 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
+        db.commit()
     except Exception as e:
         logger.error(f"Database session error: {e}")
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception as rollback_error:
+            logger.error(f"Database rollback error: {rollback_error}")
         raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as close_error:
+            logger.error(f"Database close error: {close_error}")
 
 
 def get_db_session() -> Session:
@@ -95,6 +104,29 @@ def get_db_session() -> Session:
     用于非FastAPI上下文中的数据库操作
     """
     return SessionLocal()
+
+
+async def get_db_async() -> AsyncGenerator[Session, None]:
+    """
+    异步数据库会话依赖
+    用于处理异步操作，避免连接状态冲突
+    """
+    db = SessionLocal()
+    try:
+        yield db
+        await asyncio.to_thread(db.commit)
+    except Exception as e:
+        logger.error(f"Async database session error: {e}")
+        try:
+            await asyncio.to_thread(db.rollback)
+        except Exception as rollback_error:
+            logger.error(f"Async database rollback error: {rollback_error}")
+        raise
+    finally:
+        try:
+            await asyncio.to_thread(db.close)
+        except Exception as close_error:
+            logger.error(f"Async database close error: {close_error}")
 
 
 class DatabaseManager:

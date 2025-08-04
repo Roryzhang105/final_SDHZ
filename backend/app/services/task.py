@@ -9,6 +9,8 @@ import uuid
 import shutil
 import asyncio
 import logging
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.task import Task, TaskStatusEnum
 from app.services.file import FileService
@@ -103,6 +105,232 @@ class TaskService:
         }
         return progress_map.get(status, 0)
     
+    async def batch_create_tasks_from_uploads(self, validated_files: List[Dict[str, Any]], user_id: Optional[int] = None) -> Dict[str, Any]:
+        """批量创建任务"""
+        try:
+            batch_id = str(uuid.uuid4())
+            tasks_results = []
+            
+            print(f"开始批量创建任务 - 批次ID: {batch_id}, 文件数量: {len(validated_files)}")
+            
+            # 使用线程池并行处理文件上传和任务创建
+            with ThreadPoolExecutor(max_workers=min(len(validated_files), 5)) as executor:
+                # 提交所有任务
+                future_to_file = {}
+                for file_info in validated_files:
+                    future = executor.submit(self._create_single_task_sync, file_info, user_id, batch_id)
+                    future_to_file[future] = file_info
+                
+                # 收集结果
+                for future in as_completed(future_to_file):
+                    file_info = future_to_file[future]
+                    try:
+                        result = future.result()
+                        result["filename"] = file_info["filename"]
+                        result["index"] = file_info["index"]
+                        tasks_results.append(result)
+                    except Exception as e:
+                        logger.error(f"批量任务创建失败 - 文件: {file_info['filename']}, 错误: {e}")
+                        tasks_results.append({
+                            "success": False,
+                            "message": f"创建任务失败: {str(e)}",
+                            "filename": file_info["filename"],
+                            "index": file_info["index"]
+                        })
+            
+            # 按索引排序，保持原始顺序
+            tasks_results.sort(key=lambda x: x.get("index", 0))
+            
+            # 统计结果
+            success_count = len([r for r in tasks_results if r["success"]])
+            total_count = len(tasks_results)
+            
+            # 如果有成功的任务，启动批量处理
+            successful_tasks = [r for r in tasks_results if r["success"]]
+            if successful_tasks:
+                await self._start_batch_processing(batch_id, [r["data"]["task_id"] for r in successful_tasks])
+            
+            return {
+                "success": success_count > 0,
+                "message": f"批量创建完成：成功 {success_count}/{total_count} 个任务",
+                "batch_id": batch_id,
+                "tasks": tasks_results
+            }
+            
+        except Exception as e:
+            logger.error(f"批量创建任务失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "message": f"批量创建任务失败: {str(e)}",
+                "batch_id": None,
+                "tasks": []
+            }
+    
+    def _create_single_task_sync(self, file_info: Dict[str, Any], user_id: Optional[int], batch_id: str) -> Dict[str, Any]:
+        """同步创建单个任务（供线程池使用）- 使用独立数据库会话"""
+        # 创建独立的数据库会话供线程使用
+        from app.core.database import SessionLocal
+        db = SessionLocal()
+        
+        try:
+            # 由于UploadFile不能在线程中使用，我们在这里直接处理文件内容
+            filename = file_info["filename"]
+            content = file_info["content"]  # 文件内容已经在主线程中读取
+            
+            # 保存文件
+            import uuid
+            from app.core.config import settings
+            
+            # 生成唯一文件名
+            file_extension = os.path.splitext(filename)[1]
+            file_id = str(uuid.uuid4())
+            unique_filename = f"{file_id}{file_extension}"
+            
+            # 确保上传目录存在
+            os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+            
+            # 保存文件
+            file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+            with open(file_path, "wb") as f:
+                f.write(content)
+            
+            # 生成文件访问URL
+            file_url = f"/static/uploads/{unique_filename}"
+            
+            file_info_result = {
+                "file_id": file_id,
+                "filename": filename,
+                "file_path": file_path,
+                "file_url": file_url,
+                "size": len(content)
+            }
+            
+            # 创建任务
+            task = Task(
+                task_name=f"批量处理_{filename}",
+                description=f"批量任务批次 {batch_id} 中的文件: {filename}",
+                status=TaskStatusEnum.PENDING,
+                image_path=file_info_result.get("file_path"),
+                image_url=file_info_result.get("file_url", ""),
+                file_size=file_info_result.get("size"),
+                user_id=user_id,
+                started_at=datetime.now(),
+                extra_metadata={"batch_id": batch_id}
+            )
+            
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            
+            logger.info(f"批量任务创建成功: task_id={task.task_id}, batch_id={batch_id}")
+            
+            return {
+                "success": True,
+                "message": "任务创建成功",
+                "data": {
+                    "task_id": task.task_id,
+                    "batch_id": batch_id,
+                    "image_url": task.image_url,
+                    "status": task.status.value,
+                    "created_at": task.created_at.isoformat() if task.created_at else None
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"单个任务创建失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            db.rollback()
+            return {
+                "success": False,
+                "message": f"创建任务失败: {str(e)}"
+            }
+        finally:
+            # 确保关闭独立的数据库会话
+            db.close()
+    
+    async def _start_batch_processing(self, batch_id: str, task_ids: List[str]):
+        """启动批量任务处理"""
+        try:
+            logger.info(f"启动批量处理 - 批次ID: {batch_id}, 任务数量: {len(task_ids)}")
+            
+            # 为每个任务启动异步处理
+            processing_tasks = []
+            for task_id in task_ids:
+                processing_tasks.append(asyncio.create_task(self._trigger_qr_recognition(task_id)))
+            
+            # 不等待所有任务完成，让它们在后台运行
+            logger.info(f"批量处理已启动 - 批次ID: {batch_id}")
+            
+        except Exception as e:
+            logger.error(f"启动批量处理失败 - 批次ID: {batch_id}, 错误: {e}")
+    
+    async def get_batch_status(self, batch_id: str) -> Optional[Dict[str, Any]]:
+        """获取批量任务状态"""
+        try:
+            # 查找属于该批次的所有任务
+            tasks = self.db.query(Task).filter(
+                Task.extra_metadata.op('->>')('batch_id') == batch_id
+            ).all()
+            
+            if not tasks:
+                return None
+            
+            # 统计各状态的任务数量
+            status_counts = {}
+            total_tasks = len(tasks)
+            completed_tasks = 0
+            failed_tasks = 0
+            processing_tasks = 0
+            
+            task_details = []
+            
+            for task in tasks:
+                status = task.status.value
+                status_counts[status] = status_counts.get(status, 0) + 1
+                
+                if status == "completed":
+                    completed_tasks += 1
+                elif status == "failed":
+                    failed_tasks += 1
+                elif status in ["pending", "recognizing", "tracking", "generating"]:
+                    processing_tasks += 1
+                
+                task_details.append({
+                    "task_id": task.task_id,
+                    "status": status,
+                    "progress": self._calculate_progress(task.status),
+                    "tracking_number": task.tracking_number,
+                    "error_message": task.error_message,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None
+                })
+            
+            # 计算整体进度
+            if total_tasks > 0:
+                overall_progress = (completed_tasks / total_tasks) * 100
+            else:
+                overall_progress = 0
+            
+            return {
+                "batch_id": batch_id,
+                "total_tasks": total_tasks,
+                "completed_tasks": completed_tasks,
+                "failed_tasks": failed_tasks,
+                "processing_tasks": processing_tasks,
+                "overall_progress": round(overall_progress, 2),
+                "status_counts": status_counts,
+                "is_completed": processing_tasks == 0,
+                "tasks": task_details,
+                "created_at": min(task.created_at for task in tasks).isoformat() if tasks else None
+            }
+            
+        except Exception as e:
+            logger.error(f"获取批量任务状态失败 - 批次ID: {batch_id}, 错误: {e}")
+            return None
+    
     async def create_task_from_upload(self, file: UploadFile, user_id: Optional[int] = None) -> Dict[str, Any]:
         """从上传的文件创建任务"""
         try:
@@ -178,12 +406,25 @@ class TaskService:
             query_timeout=30
         ).all()
     
-    def get_all_tasks(self, limit: int = 50, offset: int = 0) -> List[Task]:
+    def get_all_tasks(self, limit: int = 50, offset: int = 0, status_filter: Optional[str] = None) -> List[Task]:
         """获取所有任务列表 - 优化版本"""
-        # 添加查询超时并使用eager loading避免N+1问题
-        return self.db.query(Task).options(
+        # 构建查询
+        query = self.db.query(Task).options(
             joinedload(Task.user)
-        ).order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
+        )
+        
+        # 添加状态过滤
+        if status_filter:
+            # 确保状态值有效
+            try:
+                status_enum = TaskStatusEnum(status_filter.upper())
+                query = query.filter(Task.status == status_enum)
+            except ValueError:
+                # 如果状态无效，返回空结果
+                return []
+        
+        # 添加查询超时并使用eager loading避免N+1问题
+        return query.order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
             compiled_cache={},
             query_timeout=30
         ).all()
@@ -695,41 +936,45 @@ class TaskService:
                 print(f"更新任务状态失败: {str(commit_error)}")
     
     async def _trigger_document_generation(self, task_id: str):
-        """触发文档生成处理 - 按步骤顺序执行"""
+        """触发文档生成处理 - 使用独立数据库会话避免连接冲突"""
+        from app.core.database import get_db_session
+        
+        # 创建独立的数据库会话用于异步任务
+        db_session = get_db_session()
         try:
-            # 获取task对象确保数据库会话有效
-            task = self.get_task_by_id(task_id)
+            # 使用新会话创建临时TaskService实例
+            temp_service = TaskService(db_session)
+            
+            # 获取task对象
+            task = temp_service.get_task_by_id(task_id)
             if not task:
                 print(f"任务不存在 - {task_id}")
                 return
-            
-            # 刷新对象确保与数据库同步
-            self.db.refresh(task)
                 
             print(f"开始文档生成 - 任务: {task.task_id}")
             
             # 更新任务状态为生成中
             task.status = TaskStatusEnum.GENERATING
-            self.db.commit()
+            db_session.commit()
             
             # 发送WebSocket推送
             await self._send_websocket_update(task, "generating_documents")
             
             # 第一步：生成物流轨迹截图
-            screenshot_success = await self._generate_tracking_screenshot(task)
+            screenshot_success = await temp_service._generate_tracking_screenshot(task)
             if not screenshot_success:
                 # 截图生成失败，但不阻断整个流程，继续后续步骤
                 print(f"物流截图生成失败，但继续后续流程 - 任务: {task.task_id}")
             
             # 第二步：生成二维码条形码标签
-            qr_label_success = await self._generate_qr_barcode_label(task)
+            qr_label_success = await temp_service._generate_qr_barcode_label(task)
             if not qr_label_success:
                 # 二维码标签生成失败，但不阻断整个流程
                 print(f"二维码标签生成失败，但继续后续流程 - 任务: {task.task_id}")
             
             # 第三步：只有在至少有一个文件生成成功的情况下才生成最终文档
             if screenshot_success or qr_label_success:
-                receipt_success = await self._generate_delivery_receipt(task)
+                receipt_success = await temp_service._generate_delivery_receipt(task)
                 if receipt_success:
                     # 全部完成，标记任务为成功
                     task.status = TaskStatusEnum.COMPLETED
@@ -738,7 +983,7 @@ class TaskService:
                         task.processing_time = (task.completed_at - task.started_at).total_seconds()
                     
                     # 立即提交状态更新
-                    self.db.commit()
+                    db_session.commit()
                     
                     # 发送WebSocket推送
                     await self._send_websocket_update(task, "task_completed", {
@@ -770,18 +1015,18 @@ class TaskService:
                 print(f"所有文件生成步骤都失败 - 任务: {task.task_id}")
             
             # 如果状态不是成功，则提交失败状态
-            self.db.commit()
+            db_session.commit()
             print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
         except DetachedInstanceError as e:
             print(f"数据库会话错误 - 文档生成: {str(e)}")
             # 重新获取任务并更新状态
             try:
-                task = self.get_task_by_id(task_id)
+                task = temp_service.get_task_by_id(task_id)
                 if task:
                     task.status = TaskStatusEnum.FAILED
                     task.error_message = f"数据库会话错误: {str(e)}"
-                    self.db.commit()
+                    db_session.commit()
             except Exception as commit_error:
                 print(f"更新任务状态失败: {str(commit_error)}")
         except Exception as e:
@@ -790,13 +1035,19 @@ class TaskService:
             traceback.print_exc()
             
             try:
-                task = self.get_task_by_id(task_id)
+                task = temp_service.get_task_by_id(task_id)
                 if task:
                     task.status = TaskStatusEnum.FAILED
                     task.error_message = f"文档生成失败: {str(e)}"
-                    self.db.commit()
+                    db_session.commit()
             except Exception as commit_error:
                 print(f"更新任务状态失败: {str(commit_error)}")
+        finally:
+            # 确保数据库会话被正确关闭
+            try:
+                db_session.close()
+            except Exception as close_error:
+                print(f"关闭数据库会话失败: {str(close_error)}")
     
     async def _generate_tracking_screenshot(self, task: Task) -> bool:
         """生成物流轨迹截图"""

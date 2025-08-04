@@ -130,6 +130,10 @@ async def authenticate_websocket_user(websocket: WebSocket, token: str = None) -
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token required")
         return None
     
+    # 创建独立的数据库会话避免生成器问题
+    from app.core.database import SessionLocal
+    db = SessionLocal()
+    
     try:
         # 解码JWT token
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -139,16 +143,12 @@ async def authenticate_websocket_user(websocket: WebSocket, token: str = None) -
             return None
         
         # 获取用户信息
-        db = next(get_db())
-        try:
-            auth_service = AuthService(db)
-            user = auth_service.get_user_by_username(username)
-            if user is None:
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
-                return None
-            return user
-        finally:
-            db.close()
+        auth_service = AuthService(db)
+        user = auth_service.get_user_by_username(username)
+        if user is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
+            return None
+        return user
             
     except JWTError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
@@ -157,6 +157,9 @@ async def authenticate_websocket_user(websocket: WebSocket, token: str = None) -
         logger.error(f"WebSocket认证错误: {e}")
         await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Authentication error")
         return None
+    finally:
+        # 确保关闭数据库会话
+        db.close()
 
 
 @ws_router.websocket("/ws")
