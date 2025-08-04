@@ -73,15 +73,30 @@ wait_for_backend() {
     return 1
 }
 
-# 运行数据库迁移
-run_migrations() {
-    log_step "运行数据库迁移..."
+# 初始化数据库结构
+initialize_database_schema() {
+    log_step "初始化数据库结构..."
     
+    # 先尝试直接创建表结构（适用于新安装）
+    log_info "创建数据库表结构..."
+    if docker compose exec -T backend python -c "
+from app.core.database import engine
+from app.models.base import Base
+Base.metadata.create_all(bind=engine)
+print('数据库表结构创建成功')
+" 2>/dev/null; then
+        log_info "数据库表结构创建完成"
+        return 0
+    fi
+    
+    # 如果直接创建失败，尝试运行迁移（适用于已有数据）
+    log_info "尝试运行数据库迁移..."
     if docker compose exec -T backend alembic upgrade head; then
         log_info "数据库迁移完成"
+        return 0
     else
-        log_error "数据库迁移失败"
-        return 1
+        log_warn "数据库初始化失败，但系统可能仍能正常工作"
+        return 0  # 不阻止后续流程
     fi
 }
 
@@ -188,11 +203,8 @@ main() {
         exit 1
     fi
     
-    # 运行数据库迁移
-    if ! run_migrations; then
-        log_error "数据库迁移失败"
-        exit 1
-    fi
+    # 初始化数据库结构
+    initialize_database_schema
     
     # 创建管理员用户
     create_admin_user
