@@ -135,14 +135,24 @@ start_docker() {
         sleep 2
     done
     
-    log_step "所有服务启动成功！"
-    echo "前端地址: http://localhost"
-    echo "后端API: http://localhost:8000"
-    echo "API文档: http://localhost:8000/docs"
-    echo "Flower监控: http://localhost:5555 (admin:admin123)"
-    echo ""
-    echo "查看日志: docker compose logs -f"
-    echo "停止服务: docker compose down"
+    # 运行数据库初始化
+    log_step "运行数据库初始化..."
+    if [ -f "$PROJECT_ROOT/init-db.sh" ]; then
+        "$PROJECT_ROOT/init-db.sh"
+    else
+        log_warn "数据库初始化脚本不存在，请手动初始化"
+        echo "运行命令: docker compose exec backend alembic upgrade head"
+        echo "创建管理员: docker compose exec backend python create_admin_user.py"
+        echo ""
+        echo "服务访问地址："
+        echo "前端地址: http://localhost"
+        echo "后端API: http://localhost:8000"
+        echo "API文档: http://localhost:8000/docs"
+        echo "Flower监控: http://localhost:5555 (admin:admin123)"
+        echo ""
+        echo "查看日志: docker compose logs -f"
+        echo "停止服务: docker compose down"
+    fi
 }
 
 # 开发模式启动

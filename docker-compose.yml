@@ -91,6 +91,7 @@ services:
       - TZ=Asia/Shanghai
       - PYTHONPATH=/app
       - WORKERS=1
+      - AUTO_INIT_DB=true
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app/utils/legacy:/app/app/utils/legacy

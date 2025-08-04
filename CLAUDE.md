@@ -7,26 +7,48 @@
 
 ## 构建和部署命令
 
-### Docker 构建
+### Docker 构建和部署
+
+#### 🚀 一键部署（推荐）
 ```bash
-# 构建所有服务
+# 完整的一键部署，包含数据库初始化
+./deploy.sh
+
+# 强制重新部署（清理所有数据）
+./deploy.sh --force
+```
+
+#### 📋 手动部署步骤
+```bash
+# 1. 构建所有服务
 docker compose build
 
-# 构建特定服务
-docker compose build backend
-docker compose build frontend
-
-# 启动所有服务
+# 2. 启动所有服务
 docker compose up -d
 
+# 3. 运行数据库初始化（自动创建管理员用户）  
+./init-db.sh
+
+# 或者使用原有启动脚本（已集成初始化）
+./start.sh --docker
+```
+
+#### 🔍 服务管理
+```bash
 # 查看服务状态
 docker compose ps
 
 # 查看日志
 docker compose logs -f
 
+# 重启特定服务
+docker compose restart backend
+
 # 停止所有服务
 docker compose down
+
+# 停止并删除数据
+docker compose down -v
 ```
 
 ### 开发环境
@@ -68,16 +90,25 @@ npm run lint
 
 ### 数据库操作
 ```bash
-# 数据库迁移
-cd backend
-alembic upgrade head
+# 数据库迁移（Docker环境）
+docker compose exec backend alembic upgrade head
 
 # 创建新迁移
-alembic revision --autogenerate -m "description"
+docker compose exec backend alembic revision --autogenerate -m "description"
 
 # 创建管理员用户
+docker compose exec backend python create_admin_user.py
+
+# 开发环境数据库操作
+cd backend
+alembic upgrade head
 python create_admin_user.py
 ```
+
+### 🔐 默认管理员账号
+- **用户名**: admin  
+- **密码**: admin123
+- **⚠️ 重要**: 首次登录后请立即修改密码
 
 ## CI/CD 配置
 
