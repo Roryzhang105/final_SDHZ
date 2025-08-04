@@ -73,6 +73,17 @@ const routes: Array<RouteRecordRaw> = [
           requiresAuth: true,
           hideInMenu: true
         }
+      },
+      {
+        path: 'case/management',
+        name: 'CaseManagement',
+        component: () => import('@/views/case/CaseManagement.vue'),
+        meta: {
+          title: '案件管理',
+          icon: 'Files',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
       }
     ]
   },
@@ -222,6 +233,16 @@ router.beforeEach(async (to, from, next) => {
         redirectCount++
         await authStore.logout()
         next('/login')
+        return
+      }
+    }
+    
+    // 检查管理员权限
+    if (to.meta.requiresAdmin) {
+      if (!authStore.user?.is_superuser) {
+        console.log('Access denied - admin required')
+        ElMessage.error('权限不足，仅管理员可访问')
+        next('/app/dashboard')
         return
       }
     }

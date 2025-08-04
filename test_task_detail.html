@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Task Detail Loading</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Task Detail Loading Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function testTaskDetail() {
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                resultsDiv.innerHTML += '<p>Testing task detail API...</p>';
+                
+                // Test API call
+                const response = await axios.get('http://localhost:8000/api/v1/tasks/task_2538b12e492e');
+                
+                resultsDiv.innerHTML += '<p>✅ API call successful!</p>';
+                resultsDiv.innerHTML += '<p>Response structure:</p>';
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(response.data, null, 2) + '</pre>';
+                
+                // Check if response has correct structure
+                if (response.data.success && response.data.data) {
+                    resultsDiv.innerHTML += '<p>✅ Response structure is correct</p>';
+                    resultsDiv.innerHTML += '<p>Task ID: ' + response.data.data.task_id + '</p>';
+                    resultsDiv.innerHTML += '<p>Status: ' + response.data.data.status + '</p>';
+                } else {
+                    resultsDiv.innerHTML += '<p>❌ Response structure is incorrect</p>';
+                }
+                
+                // Test frontend URL directly
+                resultsDiv.innerHTML += '<p><a href="http://localhost:5173/app/delivery/detail/task_2538b12e492e" target="_blank">🔗 Test Frontend Task Detail Page</a></p>';
+                
+            } catch (error) {
+                resultsDiv.innerHTML += '<p>❌ Error: ' + error.message + '</p>';
+                if (error.response) {
+                    resultsDiv.innerHTML += '<p>Status: ' + error.response.status + '</p>';
+                    resultsDiv.innerHTML += '<p>Response: ' + JSON.stringify(error.response.data) + '</p>';
+                }
+            }
+        }
+        
+        // Run test when page loads
+        testTaskDetail();
+    </script>
+</body>
+</html>

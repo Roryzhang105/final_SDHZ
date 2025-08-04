@@ -141,7 +141,8 @@ import {
   Camera,
   List,
   Document,
-  Van
+  Van,
+  Files
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -167,9 +168,16 @@ const menuRoutes = computed(() => {
   
   return appRoute.children.filter(route => {
     // 过滤出需要在菜单中显示的路由
-    return route.meta?.requiresAuth && 
-           !route.meta?.hideInMenu && 
-           route.meta?.title
+    if (!route.meta?.requiresAuth || route.meta?.hideInMenu || !route.meta?.title) {
+      return false
+    }
+    
+    // 检查管理员权限
+    if (route.meta?.requiresAdmin && !authStore.user?.is_superuser) {
+      return false
+    }
+    
+    return true
   }).map(route => ({
     ...route,
     // 将相对路径转换为绝对路径

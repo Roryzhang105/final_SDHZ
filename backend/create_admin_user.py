@@ -16,6 +16,13 @@ from app.models.user import User
 from app.services.auth import AuthService
 from app.models.base import Base
 
+# 导入所有模型以确保它们被注册到SQLAlchemy
+from app.models.delivery_receipt import DeliveryReceipt
+from app.models.courier import Courier
+from app.models.tracking import TrackingInfo
+from app.models.recognition import RecognitionTask, RecognitionResult, CourierPattern
+from app.models.case_info import CaseInfo
+
 def create_admin_user():
     """创建默认管理员用户"""
     

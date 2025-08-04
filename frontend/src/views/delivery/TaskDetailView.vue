@@ -1,5 +1,12 @@
 <template>
   <div class="page-content task-detail">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container" v-loading="loading" element-loading-text="正在加载任务详情...">
+      <div class="loading-placeholder"></div>
+    </div>
+
+    <!-- 任务详情内容 -->
+    <div v-else>
     <!-- 顶部基本信息 -->
     <el-card class="info-card" shadow="hover">
       <div class="task-header">
@@ -266,6 +273,83 @@
             label-width="100px"
             :disabled="!isEditing"
           >
+            <!-- 智能填充区域 -->
+            <div class="smart-fill-section">
+              <h4 class="section-title">
+                <el-icon><MagicStick /></el-icon>
+                智能填充助手
+              </h4>
+              
+              <!-- 文书类型选择 -->
+              <el-form-item label="文书类型">
+                <el-select 
+                  v-model="smartFillData.documentType" 
+                  placeholder="请选择文书类型"
+                  style="width: 100%"
+                  @change="updateSmartFill"
+                >
+                  <el-option label="补正通知书" value="补正通知书" />
+                  <el-option label="申请告知书" value="申请告知书" />
+                  <el-option label="答复告知书" value="答复告知书" />
+                  <el-option label="第三人参加通知书" value="第三人参加通知书" />
+                  <el-option label="延期通知书" value="延期通知书" />
+                  <el-option label="中止通知书" value="中止通知书" />
+                  <el-option label="终止通知书" value="终止通知书" />
+                  <el-option label="决定书" value="决定书" />
+                </el-select>
+              </el-form-item>
+              
+              <!-- 案号输入（支持自动补全） -->
+              <el-form-item label="案号">
+                <el-autocomplete
+                  v-model="smartFillData.caseNumber"
+                  :fetch-suggestions="searchCases"
+                  placeholder="输入案号搜索"
+                  style="width: 100%"
+                  @select="handleCaseSelect"
+                  @input="onCaseNumberInput"
+                  clearable
+                />
+              </el-form-item>
+              
+              <!-- 受送达人类型选择 -->
+              <el-form-item label="受送达人类型">
+                <el-select 
+                  v-model="smartFillData.recipientType" 
+                  placeholder="请选择受送达人类型"
+                  style="width: 100%"
+                  @change="updateRecipientInfo"
+                >
+                  <el-option label="申请人" value="申请人" />
+                  <el-option label="被申请人" value="被申请人" />
+                  <el-option label="第三人" value="第三人" />
+                </el-select>
+              </el-form-item>
+              
+              <!-- 自动填充按钮 -->
+              <el-form-item>
+                <el-button 
+                  type="primary" 
+                  :icon="MagicStick"
+                  @click="applySmartFill"
+                  :disabled="!canApplySmartFill"
+                  :loading="loadingCaseInfo"
+                >
+                  智能填充信息
+                </el-button>
+                <el-button 
+                  type="warning" 
+                  :icon="Refresh"
+                  @click="resetSmartFill"
+                >
+                  重置
+                </el-button>
+              </el-form-item>
+            </div>
+
+            <el-divider />
+
+            <!-- 原有表单字段 -->
             <el-form-item label="文书标题" prop="doc_title">
               <el-input
                 v-model="formData.doc_title"
@@ -332,6 +416,58 @@
               </el-button>
             </el-form-item>
           </el-form>
+        </el-card>
+        
+        <!-- 智能填充信息预览 -->
+        <el-card v-if="showPreview" class="preview-card" shadow="hover" style="margin-top: 20px;">
+          <template #header>
+            <div class="card-header">
+              <span>
+                <el-icon><View /></el-icon>
+                智能填充信息预览
+              </span>
+              <el-button 
+                type="success" 
+                :icon="DocumentAdd"
+                @click="handleGenerateReceipt"
+                :loading="generatingReceipt"
+                :disabled="!canGenerateReceipt"
+              >
+                生成送达回证
+              </el-button>
+            </div>
+          </template>
+          
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="文书名称及文号">
+              <div class="document-title">
+                <div>行政复议{{ smartFillData.documentType }}</div>
+                <div class="case-number">{{ formatCaseNumber }}</div>
+              </div>
+            </el-descriptions-item>
+            <el-descriptions-item label="受送达人">
+              <div class="recipient-info">
+                <div class="recipient-name">{{ previewData.recipientName }}</div>
+                <div v-if="smartFillData.recipientType" class="recipient-type">
+                  ({{ smartFillData.recipientType }})
+                </div>
+              </div>
+            </el-descriptions-item>
+            <el-descriptions-item label="送达时间">
+              <div class="delivery-time">{{ previewData.deliveryTime }}</div>
+            </el-descriptions-item>
+            <el-descriptions-item label="送达地点">
+              <div class="delivery-address">{{ previewData.deliveryAddress }}</div>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="selectedCaseInfo" label="案件详情">
+              <div class="case-detail-summary">
+                <p><strong>申请人：</strong>{{ selectedCaseInfo.applicant }}</p>
+                <p><strong>被申请人：</strong>{{ selectedCaseInfo.respondent }}</p>
+                <p v-if="selectedCaseInfo.third_party"><strong>第三人：</strong>{{ selectedCaseInfo.third_party }}</p>
+                <p v-if="selectedCaseInfo.closure_date"><strong>结案日期：</strong>{{ formatDate(selectedCaseInfo.closure_date) }}</p>
+              </div>
+            </el-descriptions-item>
+          </el-descriptions>
         </el-card>
       </el-col>
 
@@ -491,6 +627,7 @@
         删除任务
       </el-button>
     </div>
+    </div> <!-- 关闭任务详情内容div -->
   </div>
 </template>
 
@@ -510,14 +647,18 @@ import {
   ArrowLeft,
   FolderOpened,
   Refresh,
-  Delete
+  Delete,
+  MagicStick,
+  View
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
 import { deliveryApi } from '@/api/delivery'
 import { useDeliveryStore } from '@/stores/delivery'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
+import { searchCases as searchCasesApi, getCaseByNumber } from '@/api/case'
 import type { Task, TaskStatus } from '@/types'
+import type { CaseInfo } from '@/api/case'
 
 const route = useRoute()
 const router = useRouter()  
@@ -540,12 +681,32 @@ const taskInfo = ref<Task>({
 })
 
 const trackingInfo = ref(null)
+const loading = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
 const generating = ref(false)
 const retrying = ref(false)
 const deleting = ref(false)
 const formRef = ref<FormInstance>()
+
+// 智能填充相关数据
+const loadingCaseInfo = ref(false)
+const generatingReceipt = ref(false)
+const selectedCaseInfo = ref<CaseInfo | null>(null)
+
+// 智能填充表单数据
+const smartFillData = reactive({
+  documentType: '',
+  caseNumber: '',
+  recipientType: ''
+})
+
+// 预览数据
+const previewData = reactive({
+  recipientName: '',
+  deliveryTime: '',
+  deliveryAddress: ''
+})
 
 // WebSocket客户端
 let wsClient: ReturnType<typeof useWebSocket> | null = null
@@ -588,6 +749,46 @@ const canGenerateManually = computed(() => {
 // 检查是否有现有文档
 const hasExistingDocument = computed(() => {
   return !!taskInfo.value.document_url
+})
+
+// 智能填充相关计算属性
+const canApplySmartFill = computed(() => {
+  return smartFillData.documentType && 
+         smartFillData.caseNumber && 
+         smartFillData.recipientType
+})
+
+const showPreview = computed(() => {
+  return canApplySmartFill.value && selectedCaseInfo.value
+})
+
+const canGenerateReceipt = computed(() => {
+  return showPreview.value && 
+         previewData.recipientName && 
+         previewData.deliveryAddress &&
+         taskInfo.value.tracking_number
+})
+
+// 格式化案号显示
+const formatCaseNumber = computed(() => {
+  if (!smartFillData.caseNumber) return ''
+  
+  const caseNumber = smartFillData.caseNumber
+  
+  // 如果已经是完整格式，直接返回
+  if (caseNumber.includes('沪松府复字') || caseNumber.includes('第') && caseNumber.includes('号')) {
+    return caseNumber
+  }
+  
+  // 如果只是数字，格式化为完整格式
+  const numberMatch = caseNumber.match(/\d+/)
+  if (numberMatch) {
+    const number = numberMatch[0]
+    return `沪松府复字（2025）第${number}号`
+  }
+  
+  // 其他情况，添加默认格式
+  return `沪松府复字（2025）第${caseNumber}号`
 })
 
 // 获取状态类型
@@ -676,6 +877,25 @@ const formatDateTime = (dateString: string) => {
   }
 }
 
+// 格式化日期
+const formatDate = (dateString: string) => {
+  if (!dateString) return '-'
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return '-'
+    }
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+  } catch (error) {
+    console.error('日期格式化失败:', error)
+    return '-'
+  }
+}
+
 // 获取图片URL
 const getImageUrl = (imageUrl: string) => {
   if (!imageUrl) return ''
@@ -688,14 +908,256 @@ const getImageUrl = (imageUrl: string) => {
   return imageUrl.startsWith('/') ? `${baseUrl}${imageUrl}` : `${baseUrl}/${imageUrl}`
 }
 
-// 获取任务详情
-const fetchTaskDetail = async (taskId: string) => {
+// 智能填充相关方法
+// 案号搜索自动补全
+const searchCases = async (queryString: string, cb: (suggestions: any[]) => void) => {
+  if (!queryString) {
+    cb([])
+    return
+  }
+  
   try {
-    // 调用真实API
-    const response = await tasksApi.getTaskDetail(taskId)
+    const response = await searchCasesApi({
+      q: queryString,
+      page: 1,
+      size: 10
+    })
     
     if (response.success) {
-      taskInfo.value = response.data
+      const suggestions = response.data.cases.map(case_item => ({
+        value: case_item.case_number,
+        label: `${case_item.case_number} - ${case_item.applicant} vs ${case_item.respondent}`,
+        case_info: case_item
+      }))
+      cb(suggestions)
+    } else {
+      cb([])
+    }
+  } catch (error) {
+    console.error('搜索案件失败:', error)
+    cb([])
+  }
+}
+
+// 处理案号选择
+const handleCaseSelect = (item: any) => {
+  smartFillData.caseNumber = item.value
+  selectedCaseInfo.value = item.case_info
+  updateRecipientInfo()
+}
+
+// 案号输入处理
+const onCaseNumberInput = (value: string) => {
+  if (!value) {
+    selectedCaseInfo.value = null
+    resetPreviewData()
+  }
+}
+
+// 获取案件信息
+const fetchCaseInfo = async (caseNumber: string) => {
+  if (!caseNumber) return
+  
+  try {
+    loadingCaseInfo.value = true
+    const response = await getCaseByNumber(caseNumber)
+    
+    if (response.success) {
+      selectedCaseInfo.value = response.data
+      updateRecipientInfo()
+    } else {
+      ElMessage.warning('未找到该案号对应的案件信息')
+      selectedCaseInfo.value = null
+    }
+  } catch (error) {
+    console.error('获取案件信息失败:', error)
+    ElMessage.error('获取案件信息失败')
+    selectedCaseInfo.value = null
+  } finally {
+    loadingCaseInfo.value = false
+  }
+}
+
+// 根据受送达人类型更新信息
+const updateRecipientInfo = () => {
+  if (!selectedCaseInfo.value || !smartFillData.recipientType) {
+    resetPreviewData()
+    return
+  }
+  
+  switch (smartFillData.recipientType) {
+    case '申请人':
+      previewData.recipientName = selectedCaseInfo.value.applicant
+      previewData.deliveryAddress = selectedCaseInfo.value.applicant_address
+      break
+    case '被申请人':
+      previewData.recipientName = selectedCaseInfo.value.respondent
+      previewData.deliveryAddress = selectedCaseInfo.value.respondent_address
+      break
+    case '第三人':
+      previewData.recipientName = selectedCaseInfo.value.third_party || ''
+      previewData.deliveryAddress = selectedCaseInfo.value.third_party_address || ''
+      if (!previewData.recipientName) {
+        ElMessage.warning('该案件没有第三人信息')
+      }
+      break
+  }
+  
+  // 更新送达时间
+  updateDeliveryTime()
+}
+
+// 更新送达时间逻辑
+const updateDeliveryTime = () => {
+  if (!selectedCaseInfo.value) {
+    previewData.deliveryTime = ''
+    return
+  }
+  
+  if (smartFillData.documentType === '终止通知书' || smartFillData.documentType === '决定书') {
+    // 使用结案日期
+    if (selectedCaseInfo.value.closure_date) {
+      previewData.deliveryTime = formatDate(selectedCaseInfo.value.closure_date)
+    } else {
+      previewData.deliveryTime = '案件尚未结案'
+    }
+  } else {
+    // 使用快递送达时间
+    if (taskInfo.value.delivery_time) {
+      previewData.deliveryTime = formatDateTime(taskInfo.value.delivery_time)
+    } else if (taskInfo.value.tracking_data?.sign_time) {
+      previewData.deliveryTime = formatDateTime(taskInfo.value.tracking_data.sign_time)
+    } else {
+      previewData.deliveryTime = '快递尚未送达'
+    }
+  }
+}
+
+// 智能填充更新
+const updateSmartFill = () => {
+  updateDeliveryTime()
+}
+
+// 应用智能填充
+const applySmartFill = async () => {
+  if (!canApplySmartFill.value) {
+    ElMessage.warning('请完整填写文书类型、案号和受送达人类型')
+    return
+  }
+  
+  // 如果还没有案件信息，先获取
+  if (!selectedCaseInfo.value) {
+    await fetchCaseInfo(smartFillData.caseNumber)
+  }
+  
+  if (!selectedCaseInfo.value) return
+  
+  // 应用到表单
+  formData.doc_title = `行政复议${smartFillData.documentType}`
+  formData.receiver = previewData.recipientName
+  formData.send_location = previewData.deliveryAddress
+  formData.send_time = previewData.deliveryTime.includes('尚未') ? '' : previewData.deliveryTime
+  
+  // 自动切换到编辑模式
+  if (!isEditing.value) {
+    isEditing.value = true
+  }
+  
+  ElMessage.success('信息已智能填充到表单中')
+}
+
+// 重置智能填充
+const resetSmartFill = () => {
+  smartFillData.documentType = ''
+  smartFillData.caseNumber = ''
+  smartFillData.recipientType = ''
+  selectedCaseInfo.value = null
+  resetPreviewData()
+}
+
+// 重置预览数据
+const resetPreviewData = () => {
+  previewData.recipientName = ''
+  previewData.deliveryTime = ''
+  previewData.deliveryAddress = ''
+}
+
+// 生成送达回证
+const handleGenerateReceipt = async () => {
+  if (!canGenerateReceipt.value) {
+    ElMessage.warning('请完善所有必要信息后再生成')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      '确定要使用智能填充的信息生成送达回证吗？',
+      '确认生成',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+    
+    generatingReceipt.value = true
+    
+    // 使用智能填充API直接生成
+    const smartData = {
+      tracking_number: taskInfo.value.tracking_number || '',
+      document_type: smartFillData.documentType,
+      case_number: smartFillData.caseNumber,
+      recipient_type: smartFillData.recipientType,
+      recipient_name: previewData.recipientName,
+      delivery_time: previewData.deliveryTime.includes('尚未') ? '' : previewData.deliveryTime,
+      delivery_address: previewData.deliveryAddress,
+      sender: formData.sender || ''
+    }
+    
+    // 调用智能填充生成API
+    const response = await deliveryApi.generateSmart(smartData)
+    
+    if (response.success) {
+      ElMessage.success('送达回证生成成功！')
+      
+      // 更新任务信息
+      taskInfo.value.status = 'completed' as TaskStatus
+      taskInfo.value.document_url = `/static/documents/${response.data.doc_filename}`
+      
+      // 重新获取任务详情
+      await fetchTaskDetail(taskInfo.value.task_id)
+    } else {
+      throw new Error(response.message || '生成失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('生成失败:', error)
+      ElMessage.error('生成送达回证失败，请重试')
+    }
+  } finally {
+    generatingReceipt.value = false
+  }
+}
+
+// 获取任务详情
+const fetchTaskDetail = async (taskId: string) => {
+  loading.value = true
+  try {
+    console.log('Fetching task detail for:', taskId)
+    // 调用真实API
+    const response = await tasksApi.getTaskDetail(taskId)
+    console.log('Task detail API response:', response)
+    
+    if (response.success && response.data) {
+      // Ensure the task data has the correct structure
+      const taskData = {
+        ...response.data,
+        // Ensure id field exists (some APIs might not have it)
+        id: response.data.id || 0,
+        // Convert status to TaskStatus enum if needed
+        status: response.data.status as TaskStatus
+      }
+      taskInfo.value = taskData
       
       // 尝试获取已保存的回证信息
       if (taskInfo.value.tracking_number) {
@@ -752,12 +1214,40 @@ const fetchTaskDetail = async (taskId: string) => {
       trackingInfo.value = null
       
     } else {
+      console.error('API响应错误:', response)
       throw new Error(response.message || '获取任务详情失败')
     }
     
   } catch (error) {
     console.error('获取任务详情失败:', error)
-    ElMessage.error('获取任务详情失败')
+    let errorMessage = '获取任务详情失败'
+    
+    if (error && typeof error === 'object' && 'response' in error) {
+      const err = error as any
+      if (err.response?.status === 404) {
+        errorMessage = '任务不存在或已被删除'
+      } else if (err.response?.data?.detail) {
+        errorMessage = `获取失败: ${err.response.data.detail}`
+      } else if (err.response?.status) {
+        errorMessage = `服务器错误 (${err.response.status})`
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    
+    ElMessage.error(errorMessage)
+    
+    // 如果任务不存在，返回任务列表
+    if (error && typeof error === 'object' && 'response' in error) {
+      const err = error as any
+      if (err.response?.status === 404) {
+        setTimeout(() => {
+          router.push('/app/delivery/list')
+        }, 2000)
+      }
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -1304,6 +1794,79 @@ onUnmounted(() => {
   margin-top: 5px;
 }
 
+/* 智能填充相关样式 */
+.smart-fill-section {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.section-title {
+  margin: 0 0 20px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title .el-icon {
+  color: #6f42c1;
+}
+
+.preview-card {
+  border: 2px solid #e3f2fd;
+}
+
+.document-title {
+  font-family: 'Microsoft YaHei', sans-serif;
+}
+
+.case-number {
+  color: #1976d2;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.recipient-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recipient-name {
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.recipient-type {
+  color: #666;
+  font-size: 14px;
+}
+
+.delivery-time {
+  color: #f57c00;
+  font-weight: 500;
+}
+
+.delivery-address {
+  color: #5d4037;
+  line-height: 1.4;
+}
+
+.case-detail-summary p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #424242;
+}
+
+.case-detail-summary strong {
+  color: #333;
+}
+
 
 .download-list {
   display: flex;
@@ -1387,6 +1950,19 @@ onUnmounted(() => {
     width: 100%;
     max-width: 300px;
   }
+}
+
+/* 加载状态样式 */
+.loading-container {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-placeholder {
+  width: 100%;
+  height: 400px;
 }
 
 /* 删除确认对话框样式 */

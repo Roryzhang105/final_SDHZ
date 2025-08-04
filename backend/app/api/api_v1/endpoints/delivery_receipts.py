@@ -9,26 +9,78 @@ from app.core.database import get_db
 from app.services.delivery_receipt import DeliveryReceiptService
 from app.services.delivery_receipt_generator import DeliveryReceiptGeneratorService
 from app.tasks.receipt_tasks import process_delivery_receipt
-
-
-class DeliveryReceiptGenerateRequest(BaseModel):
-    tracking_number: str
-    doc_title: str = "送达回证"
-    sender: Optional[str] = None
-    send_time: Optional[str] = None
-    send_location: Optional[str] = None
-    receiver: Optional[str] = None
-
-
-class DeliveryReceiptUpdateRequest(BaseModel):
-    doc_title: str = "送达回证"
-    sender: Optional[str] = None
-    send_time: Optional[str] = None
-    send_location: Optional[str] = None
-    receiver: Optional[str] = None
-    remarks: Optional[str] = None
+from app.schemas.delivery_receipt import (
+    DeliveryReceiptSmartCreate,
+    DeliveryReceiptGenerateRequest,
+    DeliveryReceiptUpdateRequest,
+    DeliveryReceiptResponse
+)
+from app.api.api_v1.endpoints.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
+
+
+@router.post("/generate-smart")
+async def generate_smart_delivery_receipt(
+    data: DeliveryReceiptSmartCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    智能填充生成送达回证
+    
+    Args:
+        data: 智能填充数据
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        生成结果
+    """
+    try:
+        print(f"DEBUG: 智能生成送达回证 - 用户: {current_user.username}")
+        print(f"DEBUG: 智能填充参数:")
+        print(f"  - tracking_number: {data.tracking_number}")
+        print(f"  - document_type: {data.document_type}")
+        print(f"  - case_number: {data.case_number}")
+        print(f"  - recipient_type: {data.recipient_type}")
+        print(f"  - recipient_name: {data.recipient_name}")
+        print(f"  - delivery_time: {data.delivery_time}")
+        print(f"  - delivery_address: {data.delivery_address}")
+        print(f"  - sender: {data.sender}")
+        
+        generator_service = DeliveryReceiptGeneratorService(db)
+        result = await generator_service.generate_delivery_receipt_smart(
+            tracking_number=data.tracking_number,
+            document_type=data.document_type,
+            case_number=data.case_number,
+            recipient_type=data.recipient_type,
+            recipient_name=data.recipient_name,
+            delivery_time=data.delivery_time,
+            delivery_address=data.delivery_address,
+            sender=data.sender
+        )
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": "智能填充送达回证生成成功",
+                "data": {
+                    "tracking_number": result["tracking_number"],
+                    "receipt_id": result["receipt_id"],
+                    "doc_filename": result["doc_filename"],
+                    "file_size": result["file_size"],
+                    "download_url": f"/api/v1/delivery-receipts/{data.tracking_number}/download"
+                }
+            }
+        else:
+            raise HTTPException(status_code=400, detail=result["error"])
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"智能生成送达回证失败: {str(e)}")
 
 
 @router.post("/generate")

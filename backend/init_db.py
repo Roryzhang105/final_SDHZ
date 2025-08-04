@@ -14,6 +14,7 @@ from app.models.delivery_receipt import DeliveryReceipt
 from app.models.courier import Courier
 from app.models.tracking import TrackingInfo
 from app.models.recognition import RecognitionTask, RecognitionResult, CourierPattern
+from app.models.case_info import CaseInfo  # 新增：案件管理模型
 from app.services.auth import AuthService
 
 
@@ -159,6 +160,30 @@ def init_admin_user():
         db.close()
 
 
+def init_case_data():
+    """初始化案件管理基础数据（可选）"""
+    db = SessionLocal()
+    try:
+        # 检查是否已有案件数据
+        existing_cases = db.query(CaseInfo).count()
+        if existing_cases > 0:
+            print("案件数据已存在，跳过初始化")
+            return True
+        
+        print("案件管理模块已就绪")
+        print("可通过以下方式添加案件:")
+        print("1. 使用Web界面导入Excel文件")
+        print("2. 使用API接口创建案件")
+        print("3. 通过案件管理页面手动添加")
+        return True
+        
+    except Exception as e:
+        print(f"案件数据初始化检查失败: {e}")
+        return False
+    finally:
+        db.close()
+
+
 def main():
     """主函数"""
     print("开始初始化数据库...")
@@ -179,6 +204,10 @@ def main():
     
     # 4. 创建管理员用户
     if not init_admin_user():
+        return False
+    
+    # 5. 初始化案件管理数据
+    if not init_case_data():
         return False
     
     print("🎉 数据库初始化完成！")

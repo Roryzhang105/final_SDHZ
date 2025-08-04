@@ -8,7 +8,21 @@ import type {
 } from '@/types'
 
 export const deliveryApi = {
-  // 生成送达回证
+  // 智能填充生成送达回证
+  generateSmart(data: {
+    tracking_number: string;
+    document_type: string;
+    case_number: string;
+    recipient_type: string;
+    recipient_name: string;
+    delivery_time: string;
+    delivery_address: string;
+    sender?: string;
+  }): Promise<ApiResponse<DeliveryReceiptGenerateResponse>> {
+    return request.post('/api/v1/delivery-receipts/generate-smart', data)
+  },
+
+  // 生成送达回证（传统方式）
   generate(data: DeliveryReceiptGenerateRequest): Promise<ApiResponse<DeliveryReceiptGenerateResponse>> {
     return request.post('/api/v1/delivery-receipts/generate', data)
   },

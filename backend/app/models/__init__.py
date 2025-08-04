@@ -6,6 +6,7 @@ from .tracking import TrackingInfo
 from .recognition import RecognitionTask, RecognitionResult, CourierPattern
 from .task import Task, TaskStatusEnum
 from .activity_log import ActivityLog
+from .case_info import CaseInfo
 
 __all__ = [
     "Base",
@@ -18,5 +19,6 @@ __all__ = [
     "CourierPattern",
     "Task",
     "TaskStatusEnum",
-    "ActivityLog"
+    "ActivityLog",
+    "CaseInfo"
 ]

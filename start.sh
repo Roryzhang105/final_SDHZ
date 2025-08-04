@@ -69,7 +69,7 @@ stop_existing_services() {
     done
     
     # 清理端口
-    for port in 8000 3000 80; do
+    for port in 8000 5173 80; do
         local pids=$(lsof -ti :$port 2>/dev/null || true)
         if [ -n "$pids" ]; then
             log_info "清理端口 $port 上的进程"
@@ -148,7 +148,12 @@ start_docker() {
         echo "前端地址: http://localhost"
         echo "后端API: http://localhost:8000"
         echo "API文档: http://localhost:8000/docs"
+        echo "案件管理: http://localhost/case (需要登录)"
         echo "Flower监控: http://localhost:5555 (admin:admin123)"
+        echo ""
+        echo "默认管理员账号:"
+        echo "用户名: admin"
+        echo "密码: admin123"
         echo ""
         echo "查看日志: docker compose logs -f"
         echo "停止服务: docker compose down"
@@ -188,6 +193,12 @@ start_dev() {
     log_info "初始化数据库..."
     python init_db.py || log_warn "数据库初始化失败，请检查数据库连接"
     
+    # 运行数据库迁移（如果有新的migration文件）
+    log_info "检查数据库迁移..."
+    if [ -d "alembic/versions" ] && [ "$(ls -A alembic/versions/*.py 2>/dev/null)" ]; then
+        alembic upgrade head || log_warn "数据库迁移失败，可能是新的数据库"
+    fi
+    
     # 启动后端服务
     log_info "启动后端API服务..."
     nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 \
@@ -225,7 +236,7 @@ start_dev() {
     
     # 启动前端服务
     log_info "启动前端服务..."
-    nohup npm run preview --port 80 \
+    nohup npm run dev --port 5173 --host 0.0.0.0 \
         > "$LOG_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid"
     
@@ -286,8 +297,8 @@ check_services_status() {
     
     # 检查前端
     for i in {1..15}; do
-        if curl -s http://localhost > /dev/null 2>&1; then
-            log_info "✅ 前端服务运行正常 (http://localhost)"
+        if curl -s http://localhost:5173 > /dev/null 2>&1; then
+            log_info "✅ 前端服务运行正常 (http://localhost:5173)"
             break
         fi
         if [ $i -eq 15 ]; then
@@ -300,9 +311,14 @@ check_services_status() {
     if [ "$all_ok" = true ]; then
         log_step "🎉 所有服务启动成功！"
         echo ""
-        echo "🌐 前端地址: http://localhost"
+        echo "🌐 前端地址: http://localhost:5173"
         echo "🔧 后端API: http://localhost:8000"
         echo "📚 API文档: http://localhost:8000/docs"
+        echo "📊 案件管理: http://localhost:5173/case (需要登录)"
+        echo ""
+        echo "👤 默认管理员账号:"
+        echo "  用户名: admin"
+        echo "  密码: admin123"
         echo ""
         echo "📋 管理命令:"
         echo "  查看状态: ./status.sh"

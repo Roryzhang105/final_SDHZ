@@ -97,7 +97,7 @@ check_dev_status() {
     fi
     
     # 检查端口占用情况
-    local ports=(8000 3000 80 5555)
+    local ports=(8000 5173 80 5555)
     local port_services=("后端API" "前端开发" "前端生产" "Flower监控")
     
     for i in "${!ports[@]}"; do
@@ -175,7 +175,7 @@ check_network() {
     local endpoints=(
         "http://localhost:8000/health|后端健康检查"
         "http://localhost:8000/docs|API文档"
-        "http://localhost|前端服务"
+        "http://localhost:5173|前端服务"
         "http://localhost:5555|Flower监控"
     )
     

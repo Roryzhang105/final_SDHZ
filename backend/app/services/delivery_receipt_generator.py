@@ -95,6 +95,112 @@ class DeliveryReceiptGeneratorService:
         
         return None
     
+    def _format_case_number(self, case_number: str) -> str:
+        """
+        格式化案号，从数字转为完整格式
+        
+        Args:
+            case_number: 案号数字部分，如 "1129"
+            
+        Returns:
+            完整格式的案号，如 "沪松府复字（2025）第1129号"
+        """
+        # 如果已经是完整格式，直接返回
+        if "沪松府复字" in case_number or "第" in case_number:
+            return case_number
+        
+        # 提取数字部分
+        import re
+        numbers = re.findall(r'\d+', case_number)
+        if numbers:
+            number = numbers[0]
+            return f"沪松府复字（2025）第{number}号"
+        else:
+            # 如果没有数字，直接加前缀后缀
+            return f"沪松府复字（2025）第{case_number}号"
+    
+    def _format_delivery_time(self, delivery_time: str) -> str:
+        """
+        格式化送达时间，只保留日期部分
+        
+        Args:
+            delivery_time: 原始时间字符串，如 "2025/07/09 09:00:45"
+            
+        Returns:
+            格式化后的日期，如 "2025/07/09"
+        """
+        if not delivery_time:
+            return delivery_time
+        
+        # 如果包含时间部分，提取日期部分
+        if ' ' in delivery_time:
+            date_part = delivery_time.split(' ')[0]
+            return date_part
+        
+        # 如果只有日期，直接返回
+        return delivery_time
+    
+    async def generate_delivery_receipt_smart(
+        self,
+        tracking_number: str,
+        document_type: str,
+        case_number: str,
+        recipient_type: str,
+        recipient_name: str,
+        delivery_time: str,
+        delivery_address: str,
+        sender: Optional[str] = None
+    ) -> Dict:
+        """
+        智能填充生成送达回证Word文档
+        
+        Args:
+            tracking_number: 快递单号
+            document_type: 文书类型
+            case_number: 案号
+            recipient_type: 受送达人类型
+            recipient_name: 受送达人姓名
+            delivery_time: 送达时间
+            delivery_address: 送达地点
+            sender: 送达人
+            
+        Returns:
+            生成结果
+        """
+        try:
+            # 格式化案号
+            formatted_case_number = self._format_case_number(case_number)
+            
+            # 格式化送达时间
+            formatted_delivery_time = self._format_delivery_time(delivery_time)
+            
+            # 构建文书名称及文号 - 两行格式
+            doc_title = f"行政复议{document_type}\n{formatted_case_number}"
+            
+            print(f"DEBUG: 格式化结果:")
+            print(f"  - 原始案号: '{case_number}'")
+            print(f"  - 格式化案号: '{formatted_case_number}'")
+            print(f"  - 原始时间: '{delivery_time}'")
+            print(f"  - 格式化时间: '{formatted_delivery_time}'")
+            print(f"  - 最终标题: '{doc_title}'")
+            
+            # 调用原有的生成方法，但使用智能填充的参数
+            return self.generate_delivery_receipt(
+                tracking_number=tracking_number,
+                doc_title=doc_title,
+                sender=sender,
+                send_time=formatted_delivery_time,
+                send_location=delivery_address,
+                receiver=recipient_name
+            )
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"智能生成送达回证过程中发生错误: {str(e)}",
+                "tracking_number": tracking_number
+            }
+    
     def generate_delivery_receipt(
         self,
         tracking_number: str,

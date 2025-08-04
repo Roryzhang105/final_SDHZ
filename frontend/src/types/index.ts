@@ -129,6 +129,7 @@ export interface Task {
   }
   tracking_data?: {
     is_signed: boolean
+    sign_time?: string
     traces: Array<{
       time: string
       context: string

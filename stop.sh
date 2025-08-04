@@ -86,7 +86,7 @@ stop_dev() {
     fi
     
     # 停止可能遗漏的进程（通过端口）
-    local ports=(8000 3000 80 5555)
+    local ports=(8000 5173 80 5555)
     for port in "${ports[@]}"; do
         local pids=$(lsof -ti :$port 2>/dev/null || true)
         if [ -n "$pids" ]; then
@@ -151,7 +151,7 @@ check_status() {
     fi
     
     # 检查端口占用
-    local ports=(8000 3000 80 5555)
+    local ports=(8000 5173 80 5555)
     for port in "${ports[@]}"; do
         if lsof -i :$port >/dev/null 2>&1; then
             local pid=$(lsof -ti :$port 2>/dev/null | head -1)

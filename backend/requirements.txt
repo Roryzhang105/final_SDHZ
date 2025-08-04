@@ -39,6 +39,8 @@ numpy==1.26.4
 
 # 文档处理
 python-docx==1.1.2
+pandas==2.3.1
+openpyxl==3.1.5
 
 # 浏览器自动化（截图功能）
 selenium==4.27.1
