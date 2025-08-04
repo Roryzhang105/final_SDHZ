@@ -475,6 +475,10 @@ const initWebSocket = () => {
   wsClient.on('package_delivered', handleTaskUpdate)
   wsClient.on('generating_documents', handleTaskUpdate)
   wsClient.on('task_completed', handleTaskUpdate)
+  wsClient.on('task_failed', handleTaskUpdate)
+  
+  // 监听新任务创建
+  wsClient.on('task_created', handleTaskCreated)
   
   // 建立连接
   wsClient.connect()
@@ -511,6 +515,19 @@ const handleTaskUpdate = (message: WebSocketMessage) => {
     // 如果是新任务，重新获取列表
     console.log('检测到新任务，刷新列表')
     fetchList()
+  }
+}
+
+const handleTaskCreated = (message: WebSocketMessage) => {
+  console.log('收到新任务创建消息:', message)
+  
+  // 刷新任务列表以显示新创建的任务
+  fetchList()
+  
+  // 显示任务创建成功的消息
+  const taskId = message.task_id
+  if (taskId) {
+    ElMessage.success(`新任务 ${taskId} 已创建`)
   }
 }
 

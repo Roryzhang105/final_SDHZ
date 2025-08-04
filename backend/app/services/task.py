@@ -148,6 +148,19 @@ class TaskService:
             # 如果有成功的任务，启动批量处理
             successful_tasks = [r for r in tasks_results if r["success"]]
             if successful_tasks:
+                # 为每个成功创建的任务发送WebSocket消息
+                for task_result in successful_tasks:
+                    task_data = task_result["data"]
+                    # 获取创建的任务对象来发送WebSocket消息
+                    task = self.get_task_by_id(task_data["task_id"])
+                    if task:
+                        await self._send_websocket_update(task, "task_created", {
+                            "task_id": task.task_id,
+                            "status": task.status.value,
+                            "created_at": task.created_at.isoformat() if task.created_at else None,
+                            "batch_id": batch_id
+                        })
+                
                 await self._start_batch_processing(batch_id, [r["data"]["task_id"] for r in successful_tasks])
             
             return {
@@ -360,7 +373,14 @@ class TaskService:
             
             print(f"任务保存成功到数据库: id={task.id}, task_id={task.task_id}")
             
-            # 3. 启动异步二维码识别（不等待完成）
+            # 3. 发送任务创建的WebSocket消息
+            await self._send_websocket_update(task, "task_created", {
+                "task_id": task.task_id,
+                "status": task.status.value,
+                "created_at": task.created_at.isoformat() if task.created_at else None
+            })
+            
+            # 4. 启动异步二维码识别（不等待完成）
             asyncio.create_task(self._trigger_qr_recognition(task.task_id))
             
             return {
@@ -985,10 +1005,14 @@ class TaskService:
                     # 立即提交状态更新
                     db_session.commit()
                     
-                    # 发送WebSocket推送
+                    # 刷新任务对象以确保获取最新的二维码标签信息
+                    db_session.refresh(task)
+                    
+                    # 发送WebSocket推送，包含完整的文件信息
                     await self._send_websocket_update(task, "task_completed", {
                         "document_url": task.document_url,
                         "screenshot_url": task.screenshot_url,
+                        "qr_label_url": task.extra_metadata.get("qr_label_url") if task.extra_metadata else None,
                         "processing_time": task.processing_time
                     })
                     
@@ -1008,14 +1032,30 @@ class TaskService:
                     else:
                         task.error_message = "送达回证生成失败"
                     print(f"送达回证生成失败 - 任务: {task.task_id}, 已生成: {success_parts}")
+                    
+                    # 即使失败也发送WebSocket消息，包含已生成的文件信息
+                    await self._send_websocket_update(task, "task_failed", {
+                        "error_message": task.error_message,
+                        "screenshot_url": task.screenshot_url,
+                        "qr_label_url": task.extra_metadata.get("qr_label_url") if task.extra_metadata else None
+                    })
             else:
                 # 所有前置步骤都失败
                 task.status = TaskStatusEnum.FAILED
                 task.error_message = "物流截图和二维码标签生成均失败"
                 print(f"所有文件生成步骤都失败 - 任务: {task.task_id}")
+                
+                # 发送完全失败的WebSocket消息
+                await self._send_websocket_update(task, "task_failed", {
+                    "error_message": task.error_message
+                })
             
             # 如果状态不是成功，则提交失败状态
             db_session.commit()
+            
+            # 无论成功还是失败，都刷新任务对象以获取最新数据
+            db_session.refresh(task)
+            
             print(f"✓ 文档生成流程结束 - 任务: {task.task_id}, 最终状态: {task.status.value}")
             
         except DetachedInstanceError as e:
@@ -1103,6 +1143,9 @@ class TaskService:
                 # 将二维码文件信息保存到任务的额外数据中
                 if not task.extra_metadata:
                     task.extra_metadata = {}
+                    # 标记字段已修改
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(task, "extra_metadata")
                 
                 data = qr_result.get("data", {})
                 final_label_path = data.get("final_label_path", "")
@@ -1114,9 +1157,16 @@ class TaskService:
                     filename = os.path.basename(final_label_path)
                     task.extra_metadata["qr_label_url"] = f"/static/uploads/{filename}"
                     
+                    # 标记extra_metadata字段已修改，确保SQLAlchemy检测到变化
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(task, "extra_metadata")
+                    
                     # 保存到数据库但不提交事务
                     self.db.flush()
-                    print(f"二维码标签生成成功: {task.extra_metadata['qr_label_url']}")
+                    
+                    # 使用安全的字典访问方式
+                    qr_label_url = task.extra_metadata.get("qr_label_url", "未知URL")
+                    print(f"二维码标签生成成功: {qr_label_url}")
                     return True
             else:
                 print(f"二维码标签生成失败: {qr_result.get('error', '未知错误')}")
@@ -1124,6 +1174,11 @@ class TaskService:
                 
         except Exception as e:
             print(f"二维码标签生成异常: {str(e)}")
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
+            
+            # 记录任务状态以便调试
+            print(f"任务信息 - task_id: {task.task_id}, qr_code: {task.qr_code}, extra_metadata: {task.extra_metadata}")
             return False
     
     async def _generate_delivery_receipt(self, task: Task) -> bool:

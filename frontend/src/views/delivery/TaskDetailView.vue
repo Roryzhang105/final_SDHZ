@@ -1038,6 +1038,7 @@ const initWebSocket = (taskId: string) => {
   wsClient.on('package_delivered', handleTaskUpdate)
   wsClient.on('generating_documents', handleTaskUpdate)
   wsClient.on('task_completed', handleTaskUpdate)
+  wsClient.on('task_failed', handleTaskUpdate)
   
   // 建立连接
   wsClient.connect()
