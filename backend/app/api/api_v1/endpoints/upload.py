@@ -9,6 +9,12 @@ from app.core.config import settings
 router = APIRouter()
 
 
+@router.options("/file")
+async def options_upload_file():
+    """处理单文件上传的OPTIONS预检请求"""
+    return {"message": "OPTIONS OK"}
+
+
 @router.post("/file")
 async def upload_file(
     file: UploadFile = File(...),
@@ -28,6 +34,12 @@ async def upload_file(
         "file_id": file_info.get("file_id"),
         "file_path": file_info.get("file_path")
     }
+
+
+@router.options("/files")
+async def options_upload_files():
+    """处理文件上传的OPTIONS预检请求"""
+    return {"message": "OPTIONS OK"}
 
 
 @router.post("/files")

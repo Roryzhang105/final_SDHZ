@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.models.base import Base
 from app.api.api_v1.api import api_router
+from app.api.api_v1.websocket import ws_router
 # 导入所有模型以确保表被创建
 from app.models import Task, User, DeliveryReceipt, Courier, TrackingInfo, RecognitionTask, RecognitionResult, CourierPattern
 
@@ -33,9 +34,13 @@ app = FastAPI(
 # 设置CORS - 优化配置以正确处理预检请求
 cors_origins = settings.get_cors_origins()
 if not cors_origins:
-    # 开发模式下的默认配置，包含前端开发服务器地址
+    # 包含开发和生产环境的前端地址
     cors_origins = [
-        "http://localhost:5173",  # Vite默认端口
+        "http://localhost:80",    # 生产环境nginx端口
+        "http://localhost",       # 生产环境默认端口
+        "http://127.0.0.1:80",
+        "http://127.0.0.1",
+        "http://localhost:5173",  # Vite开发端口
         "http://127.0.0.1:5173",
         "http://localhost:3000",  # 备用端口
         "http://127.0.0.1:3000",
@@ -92,6 +97,9 @@ app.mount("/static/documents", StaticFiles(directory=documents_dir), name="docum
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# 注册WebSocket路由
+app.include_router(ws_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

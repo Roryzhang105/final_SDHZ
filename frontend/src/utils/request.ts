@@ -3,8 +3,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
 
-// 创建axios实例
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+// 创建axios实例 - 生产环境使用相对路径，开发环境使用完整URL
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '')
 console.log('🚀 API Base URL:', apiBaseUrl)
 console.log('🔧 Environment variables:', {
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,

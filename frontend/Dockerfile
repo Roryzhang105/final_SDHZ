@@ -29,6 +29,9 @@ server {
     server_name localhost;
     root /usr/share/nginx/html;
     index index.html;
+    
+    # 设置文件上传大小限制为50MB
+    client_max_body_size 50M;
 
     # 支持Vue Router的History模式
     location / {
@@ -37,11 +40,27 @@ server {
 
     # API代理到后端
     location /api {
+        # 处理预检请求
+        if (\$request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD' always;
+            add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept, Authorization, X-Requested-With' always;
+            add_header 'Access-Control-Max-Age' 1728000 always;
+            add_header 'Content-Type' 'text/plain; charset=utf-8' always;
+            add_header 'Content-Length' 0 always;
+            return 204;
+        }
+        
         proxy_pass http://backend:8000;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # 代理超时设置
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
     }
 
     # 静态资源缓存
