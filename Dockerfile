@@ -3,14 +3,19 @@
 
 # 前端构建阶段
 FROM node:22.12-alpine AS frontend-builder
+
+# 安装必要的构建工具
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci --only=production --ignore-scripts
+# 安装依赖（包括开发依赖用于构建）
+RUN npm ci --include=dev --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
 # 前端生产镜像
-FROM nginx:1.25-alpine AS frontend
+FROM nginx:1.27-alpine AS frontend
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
@@ -48,7 +53,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 CMD ["nginx", "-g", "daemon off;"]
 
 # 后端生产镜像
-FROM python:3.11-slim AS backend
+FROM python:3.12-slim AS backend
 WORKDIR /app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
@@ -68,10 +73,11 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+# 安装Chrome浏览器 (使用新的GPG密钥)
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
+    && apt-get install -y --no-install-recommends google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .
