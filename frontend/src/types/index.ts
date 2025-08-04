@@ -113,6 +113,7 @@ export interface Task {
   
   // 识别结果
   qr_result?: string
+  qr_code?: string  // 兼容旧字段
   qr_confidence?: number
   
   // 物流信息
@@ -126,6 +127,19 @@ export interface Task {
       description: string
     }>
   }
+  tracking_data?: {
+    is_signed: boolean
+    traces: Array<{
+      time: string
+      context: string
+      ftime: string
+      areaCode?: string
+      areaName?: string
+      status: string
+    }>
+  }
+  delivery_status?: string
+  delivery_time?: string
   
   // 回证信息
   doc_title?: string
@@ -144,9 +158,19 @@ export interface Task {
   error_code?: string
   
   // 进度信息
-  progress?: TaskProgress[]
+  progress?: TaskProgress[] | number
   current_stage?: string
   progress_percentage?: number
+  
+  // 扩展元数据
+  extra_metadata?: {
+    qr_label_url?: string
+    [key: string]: any
+  }
+  
+  // API响应属性
+  success?: boolean
+  message?: string
 }
 
 // 任务列表查询参数

@@ -517,6 +517,7 @@ import { deliveryApi } from '@/api/delivery'
 import { useDeliveryStore } from '@/stores/delivery'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
+import type { Task, TaskStatus } from '@/types'
 
 const route = useRoute()
 const router = useRouter()  
@@ -524,9 +525,10 @@ const deliveryStore = useDeliveryStore()
 const authStore = useAuthStore()
 
 // 响应式数据
-const taskInfo = ref({
+const taskInfo = ref<Task>({
+  id: 0,
   task_id: '',
-  status: 'pending',
+  status: 'pending' as TaskStatus,
   created_at: '',
   updated_at: '',
   image_url: '',
@@ -566,7 +568,7 @@ const formRules: FormRules = {
 }
 
 // 任务状态映射
-const statusMap = {
+const statusMap: Record<string, { text: string; type: string }> = {
   pending: { text: '待处理', type: 'info' },
   recognizing: { text: '识别中', type: 'warning' },
   tracking: { text: '查询物流中', type: 'warning' },
@@ -619,7 +621,7 @@ const isStepCompleted = (step: string) => {
 
 // 从状态获取步骤
 const getStepFromStatus = (status: string) => {
-  const statusStepMap = {
+  const statusStepMap: Record<string, string> = {
     pending: 'uploaded',
     recognizing: 'uploaded',
     tracking: 'recognized',
@@ -773,7 +775,7 @@ const handleSaveForm = async () => {
     saving.value = true
     
     // 调用真实的保存API
-    const response = await deliveryApi.updateInfo(taskInfo.value.tracking_number, {
+    const response = await deliveryApi.updateInfo(taskInfo.value.tracking_number || '', {
       doc_title: formData.doc_title,
       sender: formData.sender,
       send_time: formData.send_time,
@@ -790,8 +792,13 @@ const handleSaveForm = async () => {
     }
   } catch (error) {
     console.error('保存失败:', error)
-    if (error.response?.data?.detail) {
-      ElMessage.error(`保存失败: ${error.response.data.detail}`)
+    if (error && typeof error === 'object' && 'response' in error) {
+      const err = error as any
+      if (err.response?.data?.detail) {
+        ElMessage.error(`保存失败: ${err.response.data.detail}`)
+      } else {
+        ElMessage.error('保存失败，请重试')
+      }
     } else {
       ElMessage.error('保存失败，请重试')
     }
@@ -823,13 +830,13 @@ const handleManualGenerate = async () => {
     generating.value = true
     
     // 调用真实的重新生成API
-    const response = await deliveryApi.regenerate(taskInfo.value.tracking_number)
+    const response = await deliveryApi.regenerate(taskInfo.value.tracking_number || '')
     
     if (response.success) {
       ElMessage.success('送达回证重新生成成功！')
       
       // 更新任务信息
-      taskInfo.value.status = 'completed'
+      taskInfo.value.status = 'completed' as TaskStatus
       taskInfo.value.document_url = `/static/documents/${response.data.doc_filename}`
       
       // 重新获取任务详情以确保数据一致
@@ -840,8 +847,13 @@ const handleManualGenerate = async () => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('生成失败:', error)
-      if (error.response?.data?.detail) {
-        ElMessage.error(`生成失败: ${error.response.data.detail}`)
+      if (error && typeof error === 'object' && 'response' in error) {
+        const err = error as any
+        if (err.response?.data?.detail) {
+          ElMessage.error(`生成失败: ${err.response.data.detail}`)
+        } else {
+          ElMessage.error('生成失败，请重试')
+        }
       } else {
         ElMessage.error('生成失败，请重试')
       }
@@ -985,10 +997,15 @@ const handleDeleteTask = async () => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除任务失败:', error)
-      if (error.response?.status === 403) {
-        ElMessage.error('权限不足，仅管理员可删除任务')
-      } else if (error.response?.data?.detail) {
-        ElMessage.error(`删除失败: ${error.response.data.detail}`)
+      if (error && typeof error === 'object' && 'response' in error) {
+        const err = error as any
+        if (err.response?.status === 403) {
+          ElMessage.error('权限不足，仅管理员可删除任务')
+        } else if (err.response?.data?.detail) {
+          ElMessage.error(`删除失败: ${err.response.data.detail}`)
+        } else {
+          ElMessage.error('删除任务失败，请稍后再试')
+        }
       } else {
         ElMessage.error('删除任务失败，请稍后再试')
       }
@@ -1052,7 +1069,7 @@ const handleTaskUpdate = (message: WebSocketMessage) => {
   
   // 更新任务信息
   if (message.status) {
-    taskInfo.value.status = message.status
+    taskInfo.value.status = message.status as TaskStatus
   }
   
   // 合并新数据

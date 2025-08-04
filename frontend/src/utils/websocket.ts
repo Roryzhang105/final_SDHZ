@@ -26,8 +26,8 @@ export class WebSocketClient {
   private reconnectDelay = 1000 // 初始重连延迟（毫秒）
   private maxReconnectDelay = 30000 // 最大重连延迟（毫秒）
   private heartbeatInterval: number | null = null
-  private heartbeatTimer: NodeJS.Timeout | null = null
-  private connectionTimer: NodeJS.Timeout | null = null
+  private heartbeatTimer: number | null = null
+  private connectionTimer: number | null = null
   
   // 响应式状态
   public connectionStatus: Ref<ConnectionStatus> = ref({

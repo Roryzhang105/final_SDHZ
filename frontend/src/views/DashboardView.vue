@@ -151,7 +151,7 @@ const loading = ref(false)
 const recentActivities = ref<any[]>([])
 
 // 自动刷新定时器
-let refreshTimer: NodeJS.Timeout | null = null
+let refreshTimer: number | null = null
 
 // 加载数据
 const loadData = async () => {

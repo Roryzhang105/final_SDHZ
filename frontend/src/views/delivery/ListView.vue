@@ -253,6 +253,7 @@ import {
 import { tasksApi } from '@/api/tasks'
 import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
 import { useAuthStore } from '@/stores/auth'
+import type { Task, TaskStatus } from '@/types'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -260,8 +261,8 @@ const authStore = useAuthStore()
 // 响应式数据
 const loading = ref(false)
 const dialogVisible = ref(false)
-const tableData = ref([])
-const currentTask = ref(null)
+const tableData = ref<Task[]>([])
+const currentTask = ref<Task | null>(null)
 
 // WebSocket客户端
 let wsClient: ReturnType<typeof useWebSocket> | null = null
@@ -282,7 +283,7 @@ const pagination = reactive({
 })
 
 // 任务状态映射
-const statusMap = {
+const statusMap: Record<string, { text: string; type: string; progress: number }> = {
   pending: { text: '待处理', type: 'info', progress: 10 },
   recognizing: { text: '识别中', type: 'warning', progress: 25 },
   tracking: { text: '查询物流中', type: 'warning', progress: 50 },
@@ -297,8 +298,8 @@ const fetchList = async () => {
   loading.value = true
   try {
     const params = {
-      limit: pagination.size,
-      offset: (pagination.page - 1) * pagination.size,
+      page: pagination.page,
+      size: pagination.size,
       status: filterForm.status
     }
     
@@ -339,7 +340,7 @@ const getProgressStatus = (status: string) => {
 
 // 获取步骤索引
 const getStepIndex = (status: string) => {
-  const stepMap = {
+  const stepMap: Record<string, number> = {
     pending: 0,
     recognizing: 1,
     tracking: 2,

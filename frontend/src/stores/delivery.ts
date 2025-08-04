@@ -17,7 +17,7 @@ export const useDeliveryStore = defineStore('delivery', () => {
       const response = await deliveryApi.getList({ limit })
       if (response.success && response.data) {
         // 处理后端实际返回的数据结构
-        receipts.value = response.data.receipts || response.data.items || []
+        receipts.value = response.data.items || []
       }
       return response
     } catch (error) {

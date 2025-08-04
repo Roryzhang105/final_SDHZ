@@ -206,6 +206,4 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     refreshToken
   }
-}, {
-  persist: false // 不使用pinia-plugin-persistedstate，手动处理持久化
 })
