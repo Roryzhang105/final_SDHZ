@@ -13,32 +13,28 @@ BEAT_SCHEDULE = {
     'check-pending-tasks': {
         'task': 'app.tasks.tracking_tasks.check_pending_tasks',
         'schedule': crontab(minute='*/5'),
-        'options': {'queue': 'tracking'},
-        'description': '检查并处理待处理的任务，重试失败的任务'
+        'options': {'queue': 'tracking'}
     },
     
     # 每小时更新所有未完成的物流状态
     'update-all-pending-tracking': {
         'task': 'app.tasks.tracking_tasks.update_all_pending_tracking',
         'schedule': crontab(minute=0),  # 每小时整点执行
-        'options': {'queue': 'tracking'},
-        'description': '批量更新所有未完成的物流跟踪信息'
+        'options': {'queue': 'tracking'}
     },
     
     # 每30分钟检查超时任务
     'check-timeout-tasks': {
         'task': 'app.tasks.tracking_tasks.check_timeout_tasks',
         'schedule': crontab(minute='*/30'),
-        'options': {'queue': 'tracking'},
-        'description': '检查并处理超时的任务'
+        'options': {'queue': 'tracking'}
     },
     
     # 每30分钟扫描和处理失败任务
     'scan-and-process-failed-tasks': {
         'task': 'app.tasks.failure_tasks.scan_and_process_failed_tasks',
         'schedule': crontab(minute='*/30'),
-        'options': {'queue': 'recovery'},
-        'description': '扫描失败任务，自动分析和恢复可恢复的任务'
+        'options': {'queue': 'recovery'}
     },
     
     # ============ 文件和数据清理 ============
@@ -47,16 +43,14 @@ BEAT_SCHEDULE = {
     'cleanup-temp-files': {
         'task': 'app.tasks.file_tasks.cleanup_temp_files',
         'schedule': crontab(minute=0),  # 每小时整点执行
-        'options': {'queue': 'file'},
-        'description': '清理临时文件和过期的上传文件'
+        'options': {'queue': 'file'}
     },
     
     # 每2小时清理过期的任务结果
     'cleanup-expired-results': {
         'task': 'app.tasks.file_tasks.cleanup_expired_results',
         'schedule': crontab(minute=0, hour='*/2'),
-        'options': {'queue': 'file'},
-        'description': '清理过期的Celery任务结果'
+        'options': {'queue': 'file'}
     },
     
     # ============ 每日任务 ============
@@ -65,32 +59,28 @@ BEAT_SCHEDULE = {
     'generate-daily-statistics': {
         'task': 'app.tasks.monitoring_tasks.generate_daily_statistics',
         'schedule': crontab(hour=2, minute=0),
-        'options': {'queue': 'receipt'},
-        'description': '生成每日任务处理统计报告'
+        'options': {'queue': 'receipt'}
     },
     
     # 每天凌晨2:30优化数据库
     'optimize-database': {
         'task': 'app.tasks.file_tasks.optimize_database',
         'schedule': crontab(hour=2, minute=30),
-        'options': {'queue': 'file'},
-        'description': '优化数据库性能，重建索引'
+        'options': {'queue': 'file'}
     },
     
     # 每天凌晨3点备份数据库
     'backup-database': {
         'task': 'app.tasks.file_tasks.backup_database',
         'schedule': crontab(hour=3, minute=0),
-        'options': {'queue': 'file'},
-        'description': '备份数据库到本地和云存储'
+        'options': {'queue': 'file'}
     },
     
     # 每天凌晨4点清理过期任务
     'cleanup-expired-tasks': {
         'task': 'app.tasks.monitoring_tasks.cleanup_expired_tasks',
         'schedule': crontab(hour=4, minute=0),
-        'options': {'queue': 'file'},
-        'description': '清理超过保留期限的已完成任务'
+        'options': {'queue': 'file'}
     },
     
     # ============ 每周任务 ============
@@ -99,16 +89,14 @@ BEAT_SCHEDULE = {
     'cleanup-logs': {
         'task': 'app.tasks.file_tasks.cleanup_old_logs',
         'schedule': crontab(hour=4, minute=0, day_of_week=0),  # 0 = 周日
-        'options': {'queue': 'file'},
-        'description': '清理过期的日志文件'
+        'options': {'queue': 'file'}
     },
     
     # 每周一早上8点发送周报
     'generate-weekly-report': {
         'task': 'app.tasks.receipt_tasks.generate_weekly_report',
         'schedule': crontab(hour=8, minute=0, day_of_week=1),  # 1 = 周一
-        'options': {'queue': 'receipt'},
-        'description': '生成和发送周统计报告'
+        'options': {'queue': 'receipt'}
     },
     
     # ============ 每月任务 ============
@@ -117,16 +105,14 @@ BEAT_SCHEDULE = {
     'archive-old-data': {
         'task': 'app.tasks.file_tasks.archive_old_data',
         'schedule': crontab(hour=5, minute=0, day_of_month=1),
-        'options': {'queue': 'file'},
-        'description': '归档超过3个月的历史数据'
+        'options': {'queue': 'file'}
     },
     
     # 每月1号上午9点生成月报
     'generate-monthly-report': {
         'task': 'app.tasks.receipt_tasks.generate_monthly_report',
         'schedule': crontab(hour=9, minute=0, day_of_month=1),
-        'options': {'queue': 'receipt'},
-        'description': '生成月度统计报告'
+        'options': {'queue': 'receipt'}
     },
     
     # ============ 健康检查 ============
@@ -135,16 +121,14 @@ BEAT_SCHEDULE = {
     'system-health-check': {
         'task': 'app.tasks.tracking_tasks.system_health_check',
         'schedule': crontab(minute='*/10'),
-        'options': {'queue': 'tracking'},
-        'description': '检查系统服务状态和资源使用情况'
+        'options': {'queue': 'tracking'}
     },
     
     # 每小时检查磁盘空间
     'disk-space-check': {
         'task': 'app.tasks.monitoring_tasks.check_disk_space',
         'schedule': crontab(minute=15),  # 每小时15分执行
-        'options': {'queue': 'file'},
-        'description': '检查磁盘空间使用情况，发送告警'
+        'options': {'queue': 'file'}
     },
     
     # ============ 失败任务处理 ============
@@ -153,8 +137,7 @@ BEAT_SCHEDULE = {
     'analyze-failure-patterns': {
         'task': 'app.tasks.failure_tasks.analyze_failure_patterns',
         'schedule': crontab(minute=0, hour='*/6'),
-        'options': {'queue': 'monitoring'},
-        'description': '分析失败任务模式，生成趋势报告和改进建议'
+        'options': {'queue': 'monitoring'}
     }
 }
 
