@@ -47,6 +47,12 @@ export const TASK_STATUS_CONFIG = {
     type: 'danger' as const,
     color: '#F56C6C',
     progress: 0
+  },
+  returned: {
+    text: '退签',
+    type: 'warning' as const,
+    color: '#E6A23C',
+    progress: 100
   }
 }
 
@@ -98,7 +104,7 @@ export const isTaskProcessing = (status: TaskStatus): boolean => {
  * 判断任务是否已完成
  */
 export const isTaskCompleted = (status: TaskStatus): boolean => {
-  return status === 'completed'
+  return status === 'completed' || status === 'returned'
 }
 
 /**
@@ -176,7 +182,8 @@ export const getCurrentStepIndex = (status: TaskStatus): number => {
     delivered: 3,
     generating: 4,
     completed: 5,
-    failed: -1
+    failed: -1,
+    returned: 3  // 退签在物流查询后就结束了
   }
   return stepMap[status] || 0
 }

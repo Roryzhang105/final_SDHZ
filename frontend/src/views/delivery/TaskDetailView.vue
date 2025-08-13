@@ -121,17 +121,24 @@
                 <!-- 物流轨迹预览 -->
                 <div v-if="taskInfo.tracking_data.traces && taskInfo.tracking_data.traces.length > 0" class="tracking-timeline">
                   <p><strong>物流轨迹:</strong></p>
-                  <div class="timeline-preview">
+                  <div class="timeline-preview" :class="{ 'expanded': trackingExpanded }">
                     <div 
-                      v-for="(trace, index) in taskInfo.tracking_data.traces.slice(0, 3)" 
+                      v-for="(trace, index) in (trackingExpanded ? taskInfo.tracking_data.traces : taskInfo.tracking_data.traces.slice(0, 3))" 
                       :key="index"
                       class="timeline-item"
                     >
                       <span class="timeline-time">{{ trace.ftime }}</span>
                       <span class="timeline-content">{{ trace.context }}</span>
                     </div>
-                    <div v-if="taskInfo.tracking_data.traces.length > 3" class="timeline-more">
-                      ...还有{{ taskInfo.tracking_data.traces.length - 3 }}条记录
+                    <div v-if="taskInfo.tracking_data.traces.length > 3" class="timeline-toggle" @click="toggleTrackingExpanded">
+                      <span v-if="!trackingExpanded" class="expand-text">
+                        <el-icon><ArrowDown /></el-icon>
+                        展开查看全部 {{ taskInfo.tracking_data.traces.length }} 条记录
+                      </span>
+                      <span v-else class="collapse-text">
+                        <el-icon><ArrowUp /></el-icon>
+                        收起
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -139,6 +146,10 @@
             </div>
             <div v-else-if="taskInfo.status === 'tracking'">
               <p class="processing-text">🔄 正在查询中...</p>
+            </div>
+            <div v-else-if="taskInfo.status === 'returned'">
+              <p class="warning-text">📮 快递已退签</p>
+              <p>快递被拒收，已退回给寄件人，任务结束</p>
             </div>
             <div v-else-if="['tracking', 'delivered'].includes(taskInfo.status) && taskInfo.error_message">
               <p class="error-text">❌ 查询失败</p>
@@ -649,7 +660,9 @@ import {
   Refresh,
   Delete,
   MagicStick,
-  View
+  View,
+  ArrowDown,
+  ArrowUp
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
 import { deliveryApi } from '@/api/delivery'
@@ -711,6 +724,9 @@ const previewData = reactive({
 // WebSocket客户端
 let wsClient: ReturnType<typeof useWebSocket> | null = null
 
+// 物流信息展开状态
+const trackingExpanded = ref(false)
+
 // 表单数据
 const formData = reactive({
   doc_title: '送达回证',
@@ -736,7 +752,8 @@ const statusMap: Record<string, { text: string; type: string }> = {
   delivered: { text: '已签收', type: 'success' },
   generating: { text: '生成文档中', type: 'warning' },
   completed: { text: '已完成', type: 'success' },
-  failed: { text: '失败', type: 'danger' }
+  failed: { text: '失败', type: 'danger' },
+  returned: { text: '退签', type: 'warning' }
 }
 
 // 计算属性
@@ -817,6 +834,15 @@ const isStepCompleted = (step: string) => {
     return false
   }
   
+  if (taskInfo.value.status === 'returned') {
+    // 退签状态下，完成到物流查询步骤
+    if (step === 'uploaded') return true
+    if (step === 'recognized') return true
+    if (step === 'tracking') return true
+    // 退签后不会有后续步骤
+    return false
+  }
+  
   return stepIndex <= currentIndex
 }
 
@@ -829,7 +855,8 @@ const getStepFromStatus = (status: string) => {
     delivered: 'tracking',
     generating: 'delivered',
     completed: 'completed',
-    failed: 'uploaded'
+    failed: 'uploaded',
+    returned: 'tracking'
   }
   return statusStepMap[status] || 'uploaded'
 }
@@ -1546,6 +1573,11 @@ const handleBack = () => {
   router.push('/app/delivery/list')
 }
 
+// 切换物流信息展开状态
+const toggleTrackingExpanded = () => {
+  trackingExpanded.value = !trackingExpanded.value
+}
+
 // WebSocket连接和消息处理
 const initWebSocket = (taskId: string) => {
   const token = authStore.token
@@ -1780,6 +1812,79 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
+/* 物流轨迹展开/收起功能样式 */
+.timeline-toggle {
+  text-align: center;
+  margin-top: 12px;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s;
+  border-radius: 4px;
+}
+
+.timeline-toggle:hover {
+  background-color: #f0f9ff;
+}
+
+.expand-text, .collapse-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.timeline-toggle .el-icon {
+  font-size: 14px;
+  transition: transform 0.3s;
+}
+
+.timeline-toggle:hover .el-icon {
+  transform: scale(1.1);
+}
+
+/* 展开状态下的样式优化 */
+.timeline-preview.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.timeline-preview.expanded .timeline-item {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 自定义滚动条样式 */
+.timeline-preview.expanded::-webkit-scrollbar {
+  width: 6px;
+}
+
+.timeline-preview.expanded::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.timeline-preview.expanded::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.timeline-preview.expanded::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
 .generated-files {
   margin-top: 10px;
 }
@@ -1796,6 +1901,11 @@ onUnmounted(() => {
 }
 
 .processing-text {
+  color: #e6a23c;
+  font-weight: bold;
+}
+
+.warning-text {
   color: #e6a23c;
   font-weight: bold;
 }

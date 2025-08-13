@@ -15,6 +15,7 @@ class TaskStatusEnum(enum.Enum):
     GENERATING = "generating"
     COMPLETED = "completed"
     FAILED = "failed"
+    RETURNED = "returned"
 
 
 class Task(BaseModel):

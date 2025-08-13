@@ -88,7 +88,8 @@ class TaskService:
             TaskStatusEnum.DELIVERED: "快递已签收",
             TaskStatusEnum.GENERATING: "正在生成文档",
             TaskStatusEnum.COMPLETED: "任务处理完成",
-            TaskStatusEnum.FAILED: "任务处理失败"
+            TaskStatusEnum.FAILED: "任务处理失败",
+            TaskStatusEnum.RETURNED: "快递已退签"
         }
         return status_messages.get(status, "未知状态")
     
@@ -101,7 +102,8 @@ class TaskService:
             TaskStatusEnum.DELIVERED: 75,
             TaskStatusEnum.GENERATING: 90,
             TaskStatusEnum.COMPLETED: 100,
-            TaskStatusEnum.FAILED: 0
+            TaskStatusEnum.FAILED: 0,
+            TaskStatusEnum.RETURNED: 100
         }
         return progress_map.get(status, 0)
     
@@ -930,8 +932,27 @@ class TaskService:
                 task.tracking_data = tracking_result
                 task.delivery_status = tracking_result.get("current_status", "")
                 
+                # 检查物流状态
+                current_status = task.delivery_status.strip() if task.delivery_status else ""
+                
+                # 检查是否退签
+                if current_status and ("退签" in current_status or "拒收" in current_status or "退回" in current_status):
+                    task.status = TaskStatusEnum.RETURNED
+                    task.delivery_time = datetime.now()
+                    print(f"快递已退签 - 任务: {task.task_id}, 状态: {current_status}")
+                    
+                    # 立即提交状态更新
+                    self.db.commit()
+                    
+                    # 发送WebSocket推送
+                    await self._send_websocket_update(task, "package_returned", {
+                        "return_status": current_status,
+                        "tracking_data": task.tracking_data
+                    })
+                    # 退签任务不需要后续处理，直接结束
+                
                 # 检查是否已签收 - 从顶层获取is_signed字段
-                if tracking_result.get("is_signed"):
+                elif tracking_result.get("is_signed"):
                     task.status = TaskStatusEnum.DELIVERED
                     # 解析签收时间
                     sign_time_str = tracking_result.get("sign_time", "")

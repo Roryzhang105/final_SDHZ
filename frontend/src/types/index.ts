@@ -85,7 +85,8 @@ export enum TaskStatus {
   DELIVERED = 'delivered',      // 已签收
   GENERATING = 'generating',    // 生成文档中
   COMPLETED = 'completed',      // 已完成
-  FAILED = 'failed'            // 失败
+  FAILED = 'failed',           // 失败
+  RETURNED = 'returned'        // 退签
 }
 
 // 任务进度接口

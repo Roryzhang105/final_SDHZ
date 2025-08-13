@@ -51,12 +51,19 @@ def cleanup_expired_tasks(self) -> Dict[str, Any]:
             "errors": []
         }
         
-        # 1. 清理过期的已完成任务
+        # 1. 清理过期的已完成任务（包括退签任务）
         completed_threshold = datetime.now() - timedelta(days=cleanup_config["completed_tasks_days"])
         completed_tasks = db.query(Task).filter(
             and_(
-                Task.status == TaskStatusEnum.COMPLETED,
-                Task.completed_at < completed_threshold
+                Task.status.in_([TaskStatusEnum.COMPLETED, TaskStatusEnum.RETURNED]),
+                or_(
+                    Task.completed_at < completed_threshold,
+                    # 对于退签任务，使用delivery_time作为完成时间参考
+                    and_(
+                        Task.status == TaskStatusEnum.RETURNED,
+                        Task.delivery_time < completed_threshold
+                    )
+                )
             )
         ).all()
         

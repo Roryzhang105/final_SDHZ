@@ -199,6 +199,8 @@ def get_pending_tracking_tasks(db: Session) -> List[Task]:
                 Task.tracking_number.isnot(None),
                 Task.tracking_number != "",
                 Task.created_at >= seven_days_ago,
+                # 排除已退签、已完成和失败的任务
+                Task.status.notin_([TaskStatusEnum.RETURNED, TaskStatusEnum.COMPLETED, TaskStatusEnum.FAILED]),
                 or_(
                     Task.status == TaskStatusEnum.TRACKING,
                     and_(
