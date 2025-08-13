@@ -84,6 +84,17 @@ const routes: Array<RouteRecordRaw> = [
           requiresAuth: true,
           requiresAdmin: true
         }
+      },
+      {
+        path: 'admin/celery-monitor',
+        name: 'CeleryMonitor',
+        component: () => import('@/views/admin/CeleryMonitor.vue'),
+        meta: {
+          title: 'Celery监控',
+          icon: 'Monitor',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
       }
     ]
   },

@@ -15,8 +15,8 @@
               </el-tag>
             </div>
           </div>
-          <el-button type="primary" :icon="Upload" @click="handleUploadNew">
-            上传新图片
+          <el-button type="primary" :icon="Refresh" @click="handleRefresh">
+            刷新
           </el-button>
         </div>
       </template>
@@ -332,7 +332,6 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Upload,
   Search,
   Refresh,
   View,
@@ -574,9 +573,11 @@ const handleReset = () => {
   fetchList()
 }
 
-// 处理上传新图片
-const handleUploadNew = () => {
-  router.push('/app/delivery/generate')
+// 处理刷新
+const handleRefresh = async () => {
+  ElMessage.info('正在刷新数据...')
+  await fetchList()
+  ElMessage.success('数据刷新完成')
 }
 
 // 处理查看详情

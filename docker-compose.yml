@@ -127,10 +127,14 @@ services:
     command: >
       celery -A app.tasks.celery_app worker 
       --loglevel=info 
-      --concurrency=2
-      --max-tasks-per-child=1000
-      --time-limit=3600
-      --soft-time-limit=3300
+      --concurrency=1
+      --max-tasks-per-child=100
+      --time-limit=300
+      --soft-time-limit=180
+      --pool=prefork
+      --without-gossip
+      --without-mingle
+      --without-heartbeat
     environment:
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=postgres
@@ -157,9 +161,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2GB
-        reservations:
           memory: 512MB
+          cpus: '1.0'
+        reservations:
+          memory: 256MB
+          cpus: '0.5'
     networks:
       - sdhz_network
 
@@ -201,6 +207,7 @@ services:
       --loglevel=info
       --schedule=/tmp/celerybeat-schedule
       --pidfile=/tmp/celerybeat.pid
+      --max-interval=60
     environment:
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=postgres
@@ -227,9 +234,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256MB
-        reservations:
           memory: 128MB
+          cpus: '0.5'
+        reservations:
+          memory: 64MB
+          cpus: '0.1'
     networks:
       - sdhz_network
 

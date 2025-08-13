@@ -73,7 +73,7 @@ start_worker() {
     
     # 启动Worker
     log_info "启动Celery Worker进程..."
-    celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --events
 }
 
 # 启动Celery Beat (定时任务调度器)

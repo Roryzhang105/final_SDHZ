@@ -7,6 +7,7 @@ from .recognition import RecognitionTask, RecognitionResult, CourierPattern
 from .task import Task, TaskStatusEnum
 from .activity_log import ActivityLog
 from .case_info import CaseInfo
+from .celery_monitor import CeleryTaskMonitor, CeleryBeatHealth, RetryStatistics, WorkerStatistics
 
 __all__ = [
     "Base",
@@ -20,5 +21,9 @@ __all__ = [
     "Task",
     "TaskStatusEnum",
     "ActivityLog",
-    "CaseInfo"
+    "CaseInfo",
+    "CeleryTaskMonitor",
+    "CeleryBeatHealth", 
+    "RetryStatistics",
+    "WorkerStatistics"
 ]
