@@ -183,10 +183,12 @@ export interface Task {
 export interface TaskListParams {
   page: number
   size: number
-  task_id?: string
   tracking_number?: string
+  case_number?: string
+  document_type?: string
+  receiver?: string
   status?: string
-  sort_by?: 'created_asc' | 'created_desc' | 'updated_asc' | 'updated_desc'
+  sort_by?: 'created_asc' | 'created_desc' | 'updated_asc' | 'updated_desc' | 'status_asc' | 'status_desc' | 'case_number_asc' | 'case_number_desc'
   date_from?: string
   date_to?: string
 }
@@ -285,6 +287,12 @@ export interface TaskFilter {
 
 // 任务排序
 export interface TaskSort {
-  field: 'created_at' | 'updated_at' | 'status'
+  field: 'created_at' | 'updated_at' | 'status' | 'case_number'
   order: 'asc' | 'desc'
+}
+
+// 排序状态
+export interface SortState {
+  column: string | null
+  order: 'asc' | 'desc' | null
 }

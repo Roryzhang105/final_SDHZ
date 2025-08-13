@@ -283,6 +283,11 @@ async def get_task_list(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    tracking_number: Optional[str] = Query(None),
+    case_number: Optional[str] = Query(None),
+    document_type: Optional[str] = Query(None),
+    receiver: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -290,11 +295,24 @@ async def get_task_list(
     """
     service = TaskService(db)
     
-    # 过滤空状态参数
+    # 过滤空参数
     status_filter = status.strip() if status and status.strip() else None
+    tracking_number_filter = tracking_number.strip() if tracking_number and tracking_number.strip() else None
+    case_number_filter = case_number.strip() if case_number and case_number.strip() else None
+    document_type_filter = document_type.strip() if document_type and document_type.strip() else None
+    receiver_filter = receiver.strip() if receiver and receiver.strip() else None
     
     # 在数据库查询层面进行过滤，而不是在Python层面
-    tasks = service.get_all_tasks(limit=limit, offset=offset, status_filter=status_filter)
+    tasks = service.get_all_tasks(
+        limit=limit, 
+        offset=offset, 
+        status_filter=status_filter, 
+        sort_by=sort_by,
+        tracking_number=tracking_number_filter,
+        case_number=case_number_filter,
+        document_type=document_type_filter,
+        receiver=receiver_filter
+    )
     
     def parse_doc_title(doc_title):
         """解析doc_title，提取文书类型和案号"""

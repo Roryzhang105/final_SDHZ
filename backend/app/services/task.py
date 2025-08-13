@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, sessionmaker, joinedload
-from sqlalchemy import desc, func, text
+from sqlalchemy import desc, func, text, asc
 from sqlalchemy.orm.exc import DetachedInstanceError
 from typing import List, Optional, Dict, Any
 from fastapi import UploadFile
@@ -426,8 +426,8 @@ class TaskService:
             query_timeout=30
         ).all()
     
-    def get_all_tasks(self, limit: int = 50, offset: int = 0, status_filter: Optional[str] = None):
-        """获取所有任务列表 - 优化版本，包含delivery receipt信息"""
+    def get_all_tasks(self, limit: int = 50, offset: int = 0, status_filter: Optional[str] = None, sort_by: Optional[str] = None, tracking_number: Optional[str] = None, case_number: Optional[str] = None, document_type: Optional[str] = None, receiver: Optional[str] = None):
+        """获取所有任务列表 - 优化版本，包含delivery receipt信息和搜索过滤"""
         from app.models.delivery_receipt import DeliveryReceipt
         
         # 构建查询，添加DeliveryReceipt关联查询
@@ -447,8 +447,40 @@ class TaskService:
                 # 如果状态无效，返回空结果
                 return []
         
+        # 添加快递单号过滤
+        if tracking_number:
+            query = query.filter(Task.tracking_number.ilike(f'%{tracking_number}%'))
+        
+        # 添加案号过滤（从doc_title中搜索）
+        if case_number:
+            query = query.filter(DeliveryReceipt.doc_title.ilike(f'%{case_number}%'))
+        
+        # 添加文书类型过滤（从doc_title中搜索）
+        if document_type:
+            query = query.filter(DeliveryReceipt.doc_title.ilike(f'%{document_type}%'))
+        
+        # 添加受送达人过滤
+        if receiver:
+            query = query.filter(DeliveryReceipt.receiver.ilike(f'%{receiver}%'))
+        
+        # 添加排序逻辑
+        order_clause = desc(Task.created_at)  # 默认按创建时间倒序
+        if sort_by:
+            if sort_by == 'created_asc':
+                order_clause = asc(Task.created_at)
+            elif sort_by == 'created_desc':
+                order_clause = desc(Task.created_at)
+            elif sort_by == 'status_asc':
+                order_clause = asc(Task.status)
+            elif sort_by == 'status_desc':
+                order_clause = desc(Task.status)
+            elif sort_by == 'case_number_asc':
+                order_clause = asc(DeliveryReceipt.doc_title)
+            elif sort_by == 'case_number_desc':
+                order_clause = desc(DeliveryReceipt.doc_title)
+        
         # 添加查询超时并使用eager loading避免N+1问题
-        results = query.order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
+        results = query.order_by(order_clause).limit(limit).offset(offset).execution_options(
             compiled_cache={},
             query_timeout=30
         ).all()

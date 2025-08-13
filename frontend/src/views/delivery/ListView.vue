@@ -22,18 +22,34 @@
       </template>
       
       <el-form :inline="true" :model="filterForm" class="filter-form">
-        <el-form-item label="任务ID">
-          <el-input 
-            v-model="filterForm.taskId" 
-            placeholder="请输入任务ID"
-            clearable
-            @keyup.enter="handleSearch"
-          />
-        </el-form-item>
         <el-form-item label="快递单号">
           <el-input 
             v-model="filterForm.trackingNumber" 
             placeholder="请输入快递单号"
+            clearable
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item label="案号">
+          <el-input 
+            v-model="filterForm.caseNumber" 
+            placeholder="请输入案号"
+            clearable
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item label="文书类型">
+          <el-input 
+            v-model="filterForm.documentType" 
+            placeholder="请输入文书类型"
+            clearable
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item label="受送达人">
+          <el-input 
+            v-model="filterForm.receiver" 
+            placeholder="请输入受送达人"
             clearable
             @keyup.enter="handleSearch"
           />
@@ -64,22 +80,89 @@
     </el-card>
 
     <el-card class="table-card" shadow="hover">
-      <el-table
-        :data="tableData"
-        :loading="loading"
-        stripe
-        border
-        style="width: 100%"
-        row-key="id"
-      >
-        <el-table-column prop="task_id" label="任务ID" width="180" />
-        <el-table-column prop="tracking_number" label="快递单号" min-width="150">
-          <template #default="{ row }">
+      <div class="table-container">
+        <el-table
+          :data="tableData"
+          :loading="loading"
+          stripe
+          border
+          style="width: 100%"
+          row-key="id"
+          @sort-change="handleSortChange"
+        >
+        <el-table-column prop="task_id" :width="showTaskIdColumn ? 180 : 40" class-name="collapsible-column">
+          <template #header>
+            <div class="collapsible-header" @click="toggleTaskIdColumn">
+              <div v-if="showTaskIdColumn" class="header-content">
+                <span class="column-title">任务ID</span>
+                <div class="collapse-controls">
+                  <span class="hide-text">隐藏</span>
+                  <el-icon class="collapse-icon">
+                    <ArrowLeft />
+                  </el-icon>
+                </div>
+              </div>
+              <el-icon v-else class="collapse-icon collapsed">
+                <ArrowRight />
+              </el-icon>
+            </div>
+          </template>
+          <template #default="{ row }" v-if="showTaskIdColumn">
+            {{ row.task_id }}
+          </template>
+          <template #default v-else>
+            <div class="collapsed-content">
+              <el-icon class="expand-icon" @click="toggleTaskIdColumn">
+                <ArrowRight />
+              </el-icon>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="tracking_number" :width="showTrackingNumberColumn ? 150 : 40" class-name="collapsible-column">
+          <template #header>
+            <div class="collapsible-header" @click="toggleTrackingNumberColumn">
+              <div v-if="showTrackingNumberColumn" class="header-content">
+                <span class="column-title">快递单号</span>
+                <div class="collapse-controls">
+                  <span class="hide-text">隐藏</span>
+                  <el-icon class="collapse-icon">
+                    <ArrowLeft />
+                  </el-icon>
+                </div>
+              </div>
+              <el-icon v-else class="collapse-icon collapsed">
+                <ArrowRight />
+              </el-icon>
+            </div>
+          </template>
+          <template #default="{ row }" v-if="showTrackingNumberColumn">
             <span v-if="row.tracking_number">{{ row.tracking_number }}</span>
             <el-tag v-else type="info" size="small">未识别</el-tag>
           </template>
+          <template #default v-else>
+            <div class="collapsed-content">
+              <el-icon class="expand-icon" @click="toggleTrackingNumberColumn">
+                <ArrowRight />
+              </el-icon>
+            </div>
+          </template>
         </el-table-column>
-        <el-table-column prop="case_number" label="案号" min-width="100">
+        <el-table-column prop="created_at" width="180" sortable="custom" class-name="sortable-column">
+          <template #header>
+            <div class="sortable-header">
+              <span>创建时间</span><el-icon :class="['sort-icon', getSortClass('created_at')]"><component :is="getSortIcon('created_at')" /></el-icon>
+            </div>
+          </template>
+          <template #default="{ row }">
+            {{ formatDateTime(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="case_number" width="120" sortable="custom" class-name="sortable-column">
+          <template #header>
+            <div class="sortable-header">
+              <span>案号</span><el-icon :class="['sort-icon', getSortClass('case_number')]"><component :is="getSortIcon('case_number')" /></el-icon>
+            </div>
+          </template>
           <template #default="{ row }">
             <span v-if="row.case_number" class="case-number">{{ extractCaseNumber(row.case_number) }}</span>
             <el-tag v-else type="info" size="small">未设置</el-tag>
@@ -97,12 +180,12 @@
             <el-tag v-else type="info" size="small">未填写</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="160">
-          <template #default="{ row }">
-            {{ formatDateTime(row.created_at) }}
+        <el-table-column prop="status" width="140" sortable="custom" class-name="sortable-column">
+          <template #header>
+            <div class="sortable-header">
+              <span>当前状态</span><el-icon :class="['sort-icon', getSortClass('status')]"><component :is="getSortIcon('status')" /></el-icon>
+            </div>
           </template>
-        </el-table-column>
-        <el-table-column label="当前状态" width="120">
           <template #default="{ row }">
             <el-tag 
               :type="getStatusType(row.status)"
@@ -125,6 +208,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
       <div class="pagination-container">
         <el-pagination
@@ -253,12 +337,17 @@ import {
   Refresh,
   View,
   Download,
-  Picture
+  Picture,
+  ArrowRight,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Sort
 } from '@element-plus/icons-vue'
 import { tasksApi } from '@/api/tasks'
 import { useWebSocket, type WebSocketMessage } from '@/utils/websocket'
 import { useAuthStore } from '@/stores/auth'
-import type { Task, TaskStatus } from '@/types'
+import type { Task, TaskStatus, SortState } from '@/types'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -269,13 +358,25 @@ const dialogVisible = ref(false)
 const tableData = ref<Task[]>([])
 const currentTask = ref<Task | null>(null)
 
+// 控制列显示的独立变量
+const showTaskIdColumn = ref(true)
+const showTrackingNumberColumn = ref(true)
+
+// 排序状态
+const sortState = ref<SortState>({
+  column: null,
+  order: null
+})
+
 // WebSocket客户端
 let wsClient: ReturnType<typeof useWebSocket> | null = null
 
 // 筛选表单
 const filterForm = reactive({
-  taskId: '',
   trackingNumber: '',
+  caseNumber: '',
+  documentType: '',
+  receiver: '',
   status: '',
   sortBy: 'created_desc'
 })
@@ -305,7 +406,12 @@ const fetchList = async () => {
     const params = {
       page: pagination.page,
       size: pagination.size,
-      status: filterForm.status
+      tracking_number: filterForm.trackingNumber,
+      case_number: filterForm.caseNumber,
+      document_type: filterForm.documentType,
+      receiver: filterForm.receiver,
+      status: filterForm.status,
+      sort_by: filterForm.sortBy
     }
     
     // 调用真实API
@@ -357,6 +463,16 @@ const getStepIndex = (status: string) => {
   return stepMap[status] || 0
 }
 
+// 切换任务ID列显示状态
+const toggleTaskIdColumn = () => {
+  showTaskIdColumn.value = !showTaskIdColumn.value
+}
+
+// 切换快递单号列显示状态
+const toggleTrackingNumberColumn = () => {
+  showTrackingNumberColumn.value = !showTrackingNumberColumn.value
+}
+
 // 提取案号数字部分
 const extractCaseNumber = (fullCaseNumber: string) => {
   if (!fullCaseNumber) return null
@@ -364,6 +480,56 @@ const extractCaseNumber = (fullCaseNumber: string) => {
   // 使用正则表达式匹配"第xxxx号"格式中的数字
   const match = fullCaseNumber.match(/第(\d+)号/)
   return match ? match[1] : fullCaseNumber // 如果匹配不到，返回原始值
+}
+
+// 处理排序变化
+const handleSortChange = ({ prop, order }: { prop: string | null, order: 'ascending' | 'descending' | null }) => {
+  console.log('排序变化:', { prop, order })
+  
+  // 更新排序状态
+  if (prop && order) {
+    sortState.value.column = prop
+    sortState.value.order = order === 'ascending' ? 'asc' : 'desc'
+    
+    // 映射到后端的排序字段
+    let sortBy = ''
+    if (prop === 'created_at') {
+      sortBy = order === 'ascending' ? 'created_asc' : 'created_desc'
+    } else if (prop === 'status') {
+      sortBy = order === 'ascending' ? 'status_asc' : 'status_desc'
+    } else if (prop === 'case_number') {
+      sortBy = order === 'ascending' ? 'case_number_asc' : 'case_number_desc'
+    }
+    
+    filterForm.sortBy = sortBy
+  } else {
+    // 取消排序，恢复默认
+    sortState.value.column = null
+    sortState.value.order = null
+    filterForm.sortBy = 'created_desc'
+  }
+  
+  // 重新获取数据
+  pagination.page = 1
+  fetchList()
+}
+
+// 获取排序图标
+const getSortIcon = (column: string) => {
+  if (sortState.value.column !== column) {
+    return Sort // 无排序状态
+  }
+  
+  return sortState.value.order === 'asc' ? ArrowUp : ArrowDown
+}
+
+// 获取排序状态类名
+const getSortClass = (column: string) => {
+  if (sortState.value.column !== column) {
+    return 'sort-none'
+  }
+  
+  return sortState.value.order === 'asc' ? 'sort-asc' : 'sort-desc'
 }
 
 // 格式化日期时间
@@ -397,8 +563,10 @@ const handleSearch = () => {
 // 处理重置
 const handleReset = () => {
   Object.assign(filterForm, {
-    taskId: '',
     trackingNumber: '',
+    caseNumber: '',
+    documentType: '',
+    receiver: '',
     status: '',
     sortBy: 'created_desc'
   })
@@ -553,10 +721,34 @@ const cleanupWebSocket = () => {
   }
 }
 
+// 检查表格是否需要滚动
+const checkTableScroll = () => {
+  const container = document.querySelector('.table-container')
+  if (container) {
+    const hasScroll = container.scrollWidth > container.clientWidth
+    container.classList.toggle('has-scroll', hasScroll)
+    
+    // 添加滚动事件监听
+    let scrollTimer: NodeJS.Timeout
+    container.addEventListener('scroll', () => {
+      container.classList.add('scrolling')
+      clearTimeout(scrollTimer)
+      scrollTimer = setTimeout(() => {
+        container.classList.remove('scrolling')
+      }, 150)
+    })
+  }
+}
+
 // 组件挂载时获取数据并初始化WebSocket
 onMounted(() => {
   fetchList()
   initWebSocket()
+  
+  // 延迟检查滚动，确保表格已渲染
+  setTimeout(() => {
+    checkTableScroll()
+  }, 100)
 })
 
 // 组件卸载时清理WebSocket连接
@@ -597,6 +789,82 @@ onUnmounted(() => {
 
 .table-card {
   margin-bottom: 20px;
+}
+
+/* 表格容器滚动样式 */
+.table-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 6px;
+  border: 1px solid #ebeef5;
+  position: relative;
+}
+
+/* 自定义滚动条样式 */
+.table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.table-container::-webkit-scrollbar-thumb:active {
+  background: #6b7280;
+}
+
+/* Firefox滚动条样式 */
+.table-container {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f8f9fa;
+}
+
+/* 表格内边框调整 */
+.table-container .el-table {
+  border: none !important;
+}
+
+.table-container .el-table::before {
+  display: none;
+}
+
+.table-container .el-table::after {
+  display: none;
+}
+
+/* 滚动提示渐变遮罩 */
+.table-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 100%;
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.8), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* 当表格可以滚动时显示渐变提示 */
+.table-container.has-scroll::after {
+  opacity: 1;
+}
+
+/* 滚动时隐藏提示 */
+.table-container.scrolling::after {
+  opacity: 0;
 }
 
 .pagination-container {
@@ -747,6 +1015,225 @@ onUnmounted(() => {
   }
 }
 
+/* 折叠功能样式 */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: all 0.2s ease;
+  min-height: 32px;
+  width: 100%;
+}
+
+.collapsible-header:hover {
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.column-title {
+  font-weight: 500;
+  color: #303133;
+}
+
+.collapse-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hide-text {
+  font-size: 12px;
+  color: #909399;
+  font-weight: normal;
+  transition: color 0.2s ease;
+}
+
+.collapsible-header:hover .hide-text {
+  color: #409eff;
+}
+
+.collapse-icon {
+  font-size: 14px;
+  color: #909399;
+  transition: transform 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.collapse-icon:hover,
+.collapsible-header:hover .collapse-icon {
+  color: #409eff;
+}
+
+.collapse-icon.collapsed {
+  transform: rotate(0deg);
+}
+
+/* 折叠列样式 */
+:deep(.collapsible-column) {
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.collapsed-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 32px;
+}
+
+.expand-icon {
+  font-size: 14px;
+  color: #909399;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.expand-icon:hover {
+  color: #409eff;
+  background-color: #f0f9ff;
+  transform: scale(1.1);
+}
+
+
+/* 排序功能样式 */
+.sortable-header {
+  display: inline-block !important;
+  white-space: nowrap !important;
+  cursor: pointer;
+  padding: 4px !important;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  text-align: center !important;
+  line-height: 1.4 !important;
+  font-size: 14px !important;
+}
+
+.sortable-header:hover {
+  background-color: #f0f9ff;
+}
+
+.sortable-header span {
+  font-weight: 500;
+  color: #303133;
+  vertical-align: middle !important;
+  display: inline !important;
+}
+
+.sort-icon {
+  font-size: 12px !important;
+  color: #c0c4cc;
+  transition: color 0.2s ease, transform 0.2s ease;
+  vertical-align: middle !important;
+  display: inline-block !important;
+  margin-left: 2px !important;
+  width: 14px !important;
+  height: 14px !important;
+  line-height: 1 !important;
+}
+
+.sort-icon.sort-none {
+  color: #c0c4cc;
+}
+
+.sort-icon.sort-asc,
+.sort-icon.sort-desc {
+  color: #409eff;
+}
+
+.sortable-header:hover .sort-icon {
+  color: #409eff;
+  transform: scale(1.1);
+}
+
+/* 排序列样式 - 强制覆盖Element Plus样式 */
+:deep(.sortable-column) {
+  .el-table__header .cell {
+    padding: 8px 4px !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
+  }
+  
+  .el-table__header th {
+    padding: 0 !important;
+    height: auto !important;
+    vertical-align: middle !important;
+  }
+  
+  .el-table__header .cell .sortable-header {
+    width: 100% !important;
+    height: auto !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* 强制所有图标内联显示 */
+  .el-icon {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    width: 14px !important;
+    height: 14px !important;
+    line-height: 1 !important;
+    margin-left: 2px !important;
+  }
+  
+  .el-icon svg {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  /* 特别针对Sort图标的样式 */
+  .el-icon .sort-icon,
+  .sortable-header .el-icon {
+    margin-left: 2px !important;
+    vertical-align: middle !important;
+    display: inline-block !important;
+  }
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .table-container::-webkit-scrollbar {
+    height: 6px;
+  }
+  
+  .table-container {
+    border-radius: 4px;
+  }
+  
+  /* 小屏幕下优化分页容器 */
+  .pagination-container {
+    overflow-x: auto;
+    padding: 10px 0;
+  }
+  
+  .pagination-container .el-pagination {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-container::-webkit-scrollbar {
+    height: 4px;
+  }
+}
+
 /* 大屏幕优化 */
 @media (min-width: 1200px) {
   .case-number {
@@ -755,6 +1242,14 @@ onUnmounted(() => {
   
   .document-type {
     font-size: 13px;
+  }
+  
+  .sort-icon {
+    font-size: 16px;
+  }
+  
+  .table-container::-webkit-scrollbar {
+    height: 10px;
   }
 }
 </style>
