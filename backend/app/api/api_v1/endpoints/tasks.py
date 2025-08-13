@@ -296,8 +296,39 @@ async def get_task_list(
     # 在数据库查询层面进行过滤，而不是在Python层面
     tasks = service.get_all_tasks(limit=limit, offset=offset, status_filter=status_filter)
     
+    def parse_doc_title(doc_title):
+        """解析doc_title，提取文书类型和案号"""
+        if not doc_title:
+            return None, None
+            
+        lines = doc_title.strip().split('\n')
+        if len(lines) >= 2:
+            # 第一行：行政复议+文书类型
+            first_line = lines[0].strip()
+            if first_line.startswith('行政复议'):
+                document_type = first_line[4:]  # 去掉"行政复议"前缀
+            else:
+                document_type = first_line
+                
+            # 第二行：案号
+            case_number = lines[1].strip()
+            return document_type, case_number
+        elif len(lines) == 1:
+            # 只有一行，尝试解析
+            line = lines[0].strip()
+            if line.startswith('行政复议'):
+                document_type = line[4:]
+                return document_type, None
+            else:
+                return line, None
+        
+        return None, None
+    
     task_list = []
     for task in tasks:
+        # 解析doc_title
+        document_type, case_number = parse_doc_title(getattr(task, 'delivery_doc_title', None))
+        
         task_list.append({
             "task_id": task.task_id,
             "task_name": task.task_name,
@@ -307,7 +338,11 @@ async def get_task_list(
             "qr_code": task.qr_code,
             "tracking_number": task.tracking_number,
             "created_at": task.created_at.isoformat() if task.created_at else None,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            # 新增的delivery receipt信息
+            "document_type": document_type,
+            "case_number": case_number,
+            "receiver": getattr(task, 'delivery_receiver', None)
         })
     
     return {

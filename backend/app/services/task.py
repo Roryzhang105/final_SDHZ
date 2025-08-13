@@ -426,10 +426,14 @@ class TaskService:
             query_timeout=30
         ).all()
     
-    def get_all_tasks(self, limit: int = 50, offset: int = 0, status_filter: Optional[str] = None) -> List[Task]:
-        """获取所有任务列表 - 优化版本"""
-        # 构建查询
-        query = self.db.query(Task).options(
+    def get_all_tasks(self, limit: int = 50, offset: int = 0, status_filter: Optional[str] = None):
+        """获取所有任务列表 - 优化版本，包含delivery receipt信息"""
+        from app.models.delivery_receipt import DeliveryReceipt
+        
+        # 构建查询，添加DeliveryReceipt关联查询
+        query = self.db.query(Task, DeliveryReceipt.doc_title, DeliveryReceipt.receiver).outerjoin(
+            DeliveryReceipt, Task.tracking_number == DeliveryReceipt.tracking_number
+        ).options(
             joinedload(Task.user)
         )
         
@@ -444,10 +448,20 @@ class TaskService:
                 return []
         
         # 添加查询超时并使用eager loading避免N+1问题
-        return query.order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
+        results = query.order_by(desc(Task.created_at)).limit(limit).offset(offset).execution_options(
             compiled_cache={},
             query_timeout=30
         ).all()
+        
+        # 将结果转换为包含delivery receipt信息的格式
+        tasks_with_receipt = []
+        for task, doc_title, receiver in results:
+            # 为Task对象添加delivery receipt属性
+            task.delivery_doc_title = doc_title
+            task.delivery_receiver = receiver
+            tasks_with_receipt.append(task)
+        
+        return tasks_with_receipt
     
     async def update_task_status(self, task_id: str, status: TaskStatusEnum, **kwargs) -> bool:
         """更新任务状态"""

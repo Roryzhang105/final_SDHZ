@@ -116,6 +116,11 @@ export interface Task {
   qr_code?: string  // 兼容旧字段
   qr_confidence?: number
   
+  // 送达回证相关信息
+  document_type?: string   // 文书类型（如"申请告知书"）
+  case_number?: string     // 案号（如"沪松府复字（2025）第1283号"）
+  receiver?: string        // 受送达人
+  
   // 物流信息
   tracking_info?: {
     status: string

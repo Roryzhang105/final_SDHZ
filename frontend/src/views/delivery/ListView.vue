@@ -79,6 +79,24 @@
             <el-tag v-else type="info" size="small">未识别</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="case_number" label="案号" min-width="100">
+          <template #default="{ row }">
+            <span v-if="row.case_number" class="case-number">{{ extractCaseNumber(row.case_number) }}</span>
+            <el-tag v-else type="info" size="small">未设置</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="document_type" label="文书类型" min-width="120">
+          <template #default="{ row }">
+            <span v-if="row.document_type" class="document-type">{{ row.document_type }}</span>
+            <el-tag v-else type="info" size="small">未设置</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="receiver" label="受送达人" min-width="100">
+          <template #default="{ row }">
+            <span v-if="row.receiver" class="receiver">{{ row.receiver }}</span>
+            <el-tag v-else type="info" size="small">未填写</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
@@ -92,19 +110,6 @@
             >
               {{ getStatusText(row.status) }}
             </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="进度" width="200">
-          <template #default="{ row }">
-            <div class="progress-container">
-              <el-progress
-                :percentage="row.progress || getProgressPercentage(row.status)"
-                :status="getProgressStatus(row.status)"
-                :stroke-width="12"
-                :show-text="false"
-              />
-              <span class="progress-text">{{ row.progress || getProgressPercentage(row.status) }}%</span>
-            </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
@@ -352,6 +357,15 @@ const getStepIndex = (status: string) => {
   return stepMap[status] || 0
 }
 
+// 提取案号数字部分
+const extractCaseNumber = (fullCaseNumber: string) => {
+  if (!fullCaseNumber) return null
+  
+  // 使用正则表达式匹配"第xxxx号"格式中的数字
+  const match = fullCaseNumber.match(/第(\d+)号/)
+  return match ? match[1] : fullCaseNumber // 如果匹配不到，返回原始值
+}
+
 // 格式化日期时间
 const formatDateTime = (dateString: string) => {
   if (!dateString) return '-'
@@ -591,17 +605,6 @@ onUnmounted(() => {
   margin-top: 20px;
 }
 
-.progress-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: #666;
-  min-width: 30px;
-}
 
 .detail-content {
   padding: 20px 0;
@@ -709,6 +712,28 @@ onUnmounted(() => {
   border: 1px solid #e4e7ed;
 }
 
+/* 新增列样式 */
+.case-number {
+  font-family: monospace;
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.document-type {
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.receiver {
+  color: #67c23a;
+  font-weight: 500;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .filter-form .el-form-item {
@@ -720,14 +745,16 @@ onUnmounted(() => {
     gap: 15px;
     align-items: stretch;
   }
-  
-  .progress-container {
-    flex-direction: column;
-    gap: 5px;
+}
+
+/* 大屏幕优化 */
+@media (min-width: 1200px) {
+  .case-number {
+    font-size: 14px;
   }
   
-  .progress-text {
-    text-align: center;
+  .document-type {
+    font-size: 13px;
   }
 }
 </style>

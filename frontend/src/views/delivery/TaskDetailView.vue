@@ -290,7 +290,7 @@
                 >
                   <el-option label="补正通知书" value="补正通知书" />
                   <el-option label="申请告知书" value="申请告知书" />
-                  <el-option label="答复告知书" value="答复告知书" />
+                  <el-option label="答复通知书" value="答复通知书" />
                   <el-option label="第三人参加通知书" value="第三人参加通知书" />
                   <el-option label="延期通知书" value="延期通知书" />
                   <el-option label="中止通知书" value="中止通知书" />
@@ -392,7 +392,7 @@
                 style="width: 100%"
               />
               <div class="form-tip">
-                留空将自动从物流数据中获取签收时间
+                留空将自动从物流数据中获取揽收时间
               </div>
             </el-form-item>
 
@@ -1007,6 +1007,39 @@ const updateRecipientInfo = () => {
   updateDeliveryTime()
 }
 
+// 从物流轨迹数据中提取揽收时间（快递寄出时间）
+const extractPickupTime = (trackingData: any): string => {
+  if (!trackingData) return ''
+  
+  try {
+    const traces = trackingData.traces || trackingData.data || []
+    
+    // 查找状态为"揽收"的记录
+    for (const trace of traces) {
+      const status = trace.status?.trim()
+      if (status === '揽收') {
+        const timeStr = trace.time || trace.ftime
+        if (timeStr) {
+          return formatDateTime(timeStr)
+        }
+      }
+    }
+    
+    // 如果没找到"揽收"状态，尝试查找最早的物流记录
+    if (traces.length > 0) {
+      const lastTrace = traces[traces.length - 1] // 物流记录通常按时间倒序排列，最后一个是最早的
+      const timeStr = lastTrace.time || lastTrace.ftime
+      if (timeStr) {
+        return formatDateTime(timeStr)
+      }
+    }
+  } catch (error) {
+    console.error('解析物流数据失败:', error)
+  }
+  
+  return ''
+}
+
 // 更新送达时间逻辑
 const updateDeliveryTime = () => {
   if (!selectedCaseInfo.value) {
@@ -1022,13 +1055,16 @@ const updateDeliveryTime = () => {
       previewData.deliveryTime = '案件尚未结案'
     }
   } else {
-    // 使用快递送达时间
-    if (taskInfo.value.delivery_time) {
-      previewData.deliveryTime = formatDateTime(taskInfo.value.delivery_time)
-    } else if (taskInfo.value.tracking_data?.sign_time) {
-      previewData.deliveryTime = formatDateTime(taskInfo.value.tracking_data.sign_time)
+    // 使用快递揽收时间（寄出时间）
+    if (taskInfo.value.tracking_data) {
+      const pickupTime = extractPickupTime(taskInfo.value.tracking_data)
+      if (pickupTime) {
+        previewData.deliveryTime = pickupTime
+      } else {
+        previewData.deliveryTime = '快递尚未揽收'
+      }
     } else {
-      previewData.deliveryTime = '快递尚未送达'
+      previewData.deliveryTime = '暂无物流信息'
     }
   }
 }
@@ -1052,8 +1088,8 @@ const applySmartFill = async () => {
   
   if (!selectedCaseInfo.value) return
   
-  // 应用到表单
-  formData.doc_title = `行政复议${smartFillData.documentType}`
+  // 应用到表单 - 使用与预览相同的完整格式
+  formData.doc_title = `行政复议${smartFillData.documentType}\n${formatCaseNumber.value}`
   formData.receiver = previewData.recipientName
   formData.send_location = previewData.deliveryAddress
   formData.send_time = previewData.deliveryTime.includes('尚未') ? '' : previewData.deliveryTime
