@@ -317,10 +317,12 @@ async def get_cases_stats(
             func.count(CaseInfo.id).label('count')
         ).group_by(CaseInfo.status).all()
         
-        # 今年新增案件数
+        # 今月新增案件数
         current_year = func.extract('year', func.now())
-        this_year_cases = db.query(CaseInfo).filter(
-            func.extract('year', CaseInfo.created_at) == current_year
+        current_month = func.extract('month', func.now())
+        this_month_cases = db.query(CaseInfo).filter(
+            func.extract('year', CaseInfo.created_at) == current_year,
+            func.extract('month', CaseInfo.created_at) == current_month
         ).count()
         
         # 已结案件数
@@ -333,7 +335,7 @@ async def get_cases_stats(
             "message": "获取统计信息成功",
             "data": {
                 "total_cases": total_cases,
-                "this_year_cases": this_year_cases,
+                "this_month_cases": this_month_cases,
                 "closed_cases": closed_cases,
                 "active_cases": total_cases - closed_cases,
                 "status_distribution": {

@@ -61,7 +61,7 @@ export interface CaseStatsResponse {
   message: string
   data: {
     total_cases: number
-    this_year_cases: number
+    this_month_cases: number
     closed_cases: number
     active_cases: number
     status_distribution: Record<string, number>

@@ -27,8 +27,8 @@
         <div class="stats-value">{{ stats.total_cases }}</div>
       </div>
       <div class="stats-card">
-        <div class="stats-title">今年新增</div>
-        <div class="stats-value">{{ stats.this_year_cases }}</div>
+        <div class="stats-title">今月新增</div>
+        <div class="stats-value">{{ stats.this_month_cases }}</div>
       </div>
       <div class="stats-card">
         <div class="stats-title">已结案</div>
@@ -322,7 +322,7 @@ const pagination = ref({
 // 统计数据
 const stats = ref({
   total_cases: 0,
-  this_year_cases: 0,
+  this_month_cases: 0,
   closed_cases: 0,
   active_cases: 0
 })
